@@ -1,3 +1,10 @@
 node_modules
 build
 .env
+
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
+*.tfvars.json
+.env
