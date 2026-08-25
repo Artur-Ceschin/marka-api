@@ -46,10 +46,26 @@ variable "container_port" {
 variable "container_image" {
   description = "Docker image for Fastify API"
   type        = string
-  default     = "nginx:latest"
+  default     = "189761005421.dkr.ecr.us-east-1.amazonaws.com/marka-api:latest"
 }
 
 variable "public_subnet_ids" {
   description = "Public subnet IDs for ALB"
   type        = list(string)
+}
+
+variable "certificate_arn" {
+  description = "ACM certificate ARN for the HTTPS listener"
+  type        = string
+}
+
+variable "ecr_repository_url" {
+  description = "ECR repository URL (no tag)"
+  type        = string
+  default     = "189761005421.dkr.ecr.us-east-1.amazonaws.com/marka-api"
+}
+
+variable "image_tag" {
+  description = "Image tag to deploy"
+  type        = string
 }

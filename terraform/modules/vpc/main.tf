@@ -146,10 +146,10 @@ resource "aws_security_group" "fargate" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    from_port       = 3333  # Fastify port
+    from_port       = 3333
     to_port         = 3333
     protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]  # Only from ALB
+    security_groups = [aws_security_group.alb.id]
   }
 
   egress {

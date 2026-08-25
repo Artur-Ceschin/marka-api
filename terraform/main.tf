@@ -40,4 +40,22 @@ module "fargate" {
   fargate_security_group_id = module.vpc.fargate_security_group_id
   alb_security_group_id     = module.vpc.alb_security_group_id
   fargate_role_arn          = module.iam.fargate_role_arn
+  certificate_arn           = aws_acm_certificate.api.arn
+  image_tag                 = var.image_tag
+}
+
+resource "aws_acm_certificate" "api" {
+  domain_name       = "marka-api.markaplant.app"
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+output "acm_validation" {
+  value = {
+    name  = tolist(aws_acm_certificate.api.domain_validation_options)[0].resource_record_name
+    value = tolist(aws_acm_certificate.api.domain_validation_options)[0].resource_record_value
+  }
 }

@@ -29,7 +29,7 @@ resource "aws_ecs_task_definition" "fargate" {
   container_definitions = jsonencode([
     {
       name      = var.app_name
-      image     = var.container_image
+      image     = "${var.ecr_repository_url}:${var.image_tag}"
       essential = true
       portMappings = [
         {
@@ -156,4 +156,18 @@ resource "aws_iam_role" "ecs_task_execution_role" {
 resource "aws_iam_role_policy_attachment" "ecs_task_execution_role_policy" {
   role       = aws_iam_role.ecs_task_execution_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+
+resource "aws_lb_listener" "https" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = 443
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn   = var.certificate_arn
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.fargate.arn
+  }
 }

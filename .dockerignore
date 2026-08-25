@@ -1,0 +1,12 @@
+node_modules
+dist
+.git
+.env
+.env.local
+.DS_Store
+terraform
+coverage
+*.log
+.gitignore
+README.md
+CLAUDE.md
