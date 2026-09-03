@@ -1,0 +1,10 @@
+handler: dist/health.handler
+memorySize: 128
+timeout: 5
+package:
+  patterns:
+    - "!**"
+    - "dist/health.mjs"
+events:
+  - httpApi: "GET /health"
+  - httpApi: "GET /status"

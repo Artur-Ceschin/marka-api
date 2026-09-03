@@ -1,0 +1,40 @@
+name: aws
+runtime: nodejs22.x
+region: us-east-1
+profile: marka
+# Graviton: ~20% cheaper. Safe here because the bundles are pure JS.
+architecture: arm64
+
+environment:
+  NODE_ENV: production
+  # Ref returns the resource's real name, resolved by CloudFormation at
+  # deploy time. Deriving these from ${aws:accountId} instead would be
+  # wrong whenever the default AWS profile differs from `marka`.
+  PLANTS_BUCKET: !Ref PlantsBucket
+  DETECTIONS_TABLE: !Ref DetectionsTable
+
+httpApi:
+  cors: true
+
+iam:
+  role:
+    # One role shared by all three functions. Splitting it per-function
+    # needs a plugin, and isn't worth it until a function handles data
+    # the others shouldn't touch.
+    #
+    # ARNs come from GetAtt rather than a hand-built string, so they always
+    # name the account being deployed into. Fn::Join (not Fn::Sub) because
+    # Serverless would try to resolve a ${...} inside Sub as its own variable.
+    statements:
+      - Effect: Allow
+        Action:
+          - s3:PutObject
+          - s3:GetObject
+        Resource:
+          Fn::Join: ["", [!GetAtt PlantsBucket.Arn, "/*"]]
+      - Effect: Allow
+        Action:
+          - dynamodb:PutItem
+          - dynamodb:GetItem
+          - dynamodb:Query
+        Resource: !GetAtt DetectionsTable.Arn

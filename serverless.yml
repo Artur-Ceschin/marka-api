@@ -1,0 +1,19 @@
+service: marka-api
+
+custom: ${file(./sls/config/custom.yml)}
+
+provider: ${file(./sls/config/provider.yml)}
+
+# Each function is packaged as its own zip containing only its bundle.
+package:
+  individually: true
+
+functions:
+  health: ${file(./sls/functions/health.yml)}
+  auth: ${file(./sls/functions/auth.yml)}
+  identify: ${file(./sls/functions/identify.yml)}
+
+resources:
+  - ${file(./sls/resources/s3.yml)}
+  - ${file(./sls/resources/dynamodb.yml)}
+  - ${file(./sls/resources/domain.yml)}

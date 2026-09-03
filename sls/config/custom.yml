@@ -1,0 +1,10 @@
+# Resource names are defined once here and referenced everywhere else,
+# so renaming a bucket or table is a one-line change.
+# Bucket names are globally unique across all of AWS, hence the account id.
+plantsBucket: ${self:service}-plants-${sls:stage}-${aws:accountId}
+detectionsTable: ${self:service}-detections-${sls:stage}
+
+# Custom domain. The wildcard cert covers markaplant.app and *.markaplant.app,
+# so any subdomain works without a new certificate request.
+apiDomain: api.markaplant.app
+certificateArn: arn:aws:acm:us-east-1:058264487329:certificate/8a7230a3-46bd-4844-9c3d-4760a0e93186

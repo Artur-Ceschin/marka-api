@@ -1,12 +1,6 @@
 node_modules
-build
+dist/
 .env
 
-.terraform/
-.terraform.lock.hcl
-terraform.tfstate
-terraform.tfstate.backup
-*.tfvars.json
-.env
-*.tfstate
-*.tfstate.backup.
+# Serverless Framework
+.serverless/

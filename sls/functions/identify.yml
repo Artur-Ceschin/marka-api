@@ -1,0 +1,11 @@
+handler: dist/identify.handler
+# Image buffering + AI calls: more memory also means more CPU.
+memorySize: 1024
+# API Gateway HTTP API caps requests at 29s.
+timeout: 29
+package:
+  patterns:
+    - "!**"
+    - "dist/identify.mjs"
+events:
+  - httpApi: "POST /identify"

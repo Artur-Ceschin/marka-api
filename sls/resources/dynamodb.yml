@@ -1,0 +1,13 @@
+Resources:
+  # PAY_PER_REQUEST means no idle cost — matches the Lambda billing model.
+  DetectionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ${self:custom.detectionsTable}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH

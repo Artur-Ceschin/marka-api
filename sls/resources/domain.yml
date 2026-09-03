@@ -1,0 +1,30 @@
+Resources:
+  # HTTP API custom domains are REGIONAL — API Gateway terminates TLS itself
+  # and hands you a d-xxxx.execute-api target to point DNS at. CloudFront is
+  # only involved for edge-optimized REST APIs, which this is not.
+  ApiDomainName:
+    Type: AWS::ApiGatewayV2::DomainName
+    Properties:
+      DomainName: ${self:custom.apiDomain}
+      DomainNameConfigurations:
+        - CertificateArn: ${self:custom.certificateArn}
+          EndpointType: REGIONAL
+          SecurityPolicy: TLS_1_2
+
+  # Binds the domain to this API's $default stage. Without the mapping the
+  # domain resolves and completes TLS, then returns 404 for every path.
+  ApiMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    DependsOn: HttpApiStage
+    Properties:
+      ApiId: !Ref HttpApi
+      DomainName: !Ref ApiDomainName
+      Stage: "$default"
+
+Outputs:
+  ApiDomainTarget:
+    Description: "CNAME target — point the custom domain here in Cloudflare"
+    Value: !GetAtt ApiDomainName.RegionalDomainName
+  ApiCustomUrl:
+    Description: "Custom domain URL (works once DNS is pointed)"
+    Value: https://${self:custom.apiDomain}
