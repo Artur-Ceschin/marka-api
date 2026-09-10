@@ -32,6 +32,11 @@ const identifyResponseSchema = z.object({
   timestamp: z.string(),
 });
 
+const listDetectionsSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  cursor: z.string().optional(),
+});
+
 const errorResponseSchema = z.object({
   error: z.string(),
   code: z.string(),
@@ -48,6 +53,7 @@ export {
   errorResponseSchema,
   identifyRequestSchema,
   identifyResponseSchema,
+  listDetectionsSchema,
   locationSchema,
   optionsSchema,
   plantDataSchema,

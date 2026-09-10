@@ -11,3 +11,8 @@ events:
       method: POST
       authorizer:
         name: cognitoJwt
+  - httpApi:
+      path: /identifications
+      method: GET
+      authorizer:
+        name: cognitoJwt

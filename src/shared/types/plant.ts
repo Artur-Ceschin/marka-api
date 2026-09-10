@@ -25,6 +25,21 @@ export interface IdentifyPlantRequest {
 
 export interface IdentifyPlantResponse {
   success: boolean;
+  detectionId: string;
   plant: Plant[];
   timestamp: string;
+}
+
+export interface Detection {
+  userId: string;
+  detectionId: string;
+  imageUrl: string;
+  plants: Plant[];
+  location?: { latitude: number; longitude: number } | undefined;
+  createdAt: string;
+}
+
+export interface DetectionPage {
+  items: Detection[];
+  nextCursor?: string | undefined;
 }

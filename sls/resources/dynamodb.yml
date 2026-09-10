@@ -1,6 +1,7 @@
 Resources:
-  # Retain guards stack deletion AND replacement — renaming a table in
-  # custom.yml would otherwise drop it, which DeletionProtection does not stop.
+  # Retain guards stack deletion AND replacement. Note it does not make a
+  # re-key possible: CloudFormation refuses to replace a resource with an
+  # explicit name at all, so changing the key below means renaming the table.
   DetectionsTable:
     Type: AWS::DynamoDB::Table
     DeletionPolicy: Retain
@@ -12,11 +13,15 @@ Resources:
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
       AttributeDefinitions:
-        - AttributeName: id
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: detectionId
           AttributeType: S
       KeySchema:
-        - AttributeName: id
+        - AttributeName: userId
           KeyType: HASH
+        - AttributeName: detectionId
+          KeyType: RANGE
 
   UsersTable:
     Type: AWS::DynamoDB::Table

@@ -1,19 +1,18 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { IdentifyController } from "@/applications/controllers/IdentifyController";
 import {
   identifyRequestSchema,
+  listDetectionsSchema,
   locationSchema,
 } from "@/applications/schemas/identify";
-import { IdentifyPlantUseCase } from "@/applications/useCases/identify/IdentifyPlantUseCase";
-import { plantBucket } from "@/infra/clients/s3";
-import { plantIdentification } from "@/infra/gateways/plantNet";
+import { makeIdentifyController } from "@/main/factories/makeIdentifyController";
+import { authenticated, requireUser } from "@/main/plugins/authenticated";
 
 export function identifyRoutes(app: FastifyInstance) {
-  const useCase = new IdentifyPlantUseCase(plantBucket, plantIdentification);
-  const controller = new IdentifyController(useCase);
   app.post(
     "/identify",
+    { preHandler: authenticated },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      const userId = requireUser(request);
       const data = await request.file();
 
       const { latitude, longitude } = locationSchema.parse(request.query);
@@ -29,12 +28,29 @@ export function identifyRoutes(app: FastifyInstance) {
 
       identifyRequestSchema.parse({ image: data, location });
 
-      const result = await controller.identify({
+      const result = await makeIdentifyController().identify({
+        userId,
         imageData: imageBuffer,
-        location: location,
+        location,
       });
 
-      reply.status(200).send(result);
+      reply.status(201).send(result);
+    },
+  );
+
+  app.get(
+    "/identifications",
+    { preHandler: authenticated },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const userId = requireUser(request);
+      const { limit, cursor } = listDetectionsSchema.parse(request.query);
+
+      const result = await makeIdentifyController().listDetections(userId, {
+        limit,
+        cursor,
+      });
+
+      reply.status(200).send({ success: true, ...result });
     },
   );
 }
