@@ -5,6 +5,11 @@ package:
   patterns:
     - "!**"
     - "dist/auth.mjs"
+# A route with no httpApi event here is unreachable, however correctly it
+# is registered in Fastify — API Gateway simply never forwards to it.
 events:
   - httpApi: "POST /auth/signup"
+  - httpApi: "POST /auth/confirm"
   - httpApi: "POST /auth/signin"
+  - httpApi: "POST /auth/forgot-password"
+  - httpApi: "POST /auth/reset-password"

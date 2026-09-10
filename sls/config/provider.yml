@@ -12,6 +12,10 @@ environment:
   # wrong whenever the default AWS profile differs from `marka`.
   PLANTS_BUCKET: !Ref PlantsBucket
   DETECTIONS_TABLE: !Ref DetectionsTable
+  USERS_TABLE: !Ref UsersTable
+  # Ref on a UserPool returns its id; Ref on a client returns the client id.
+  USER_POOL_ID: !Ref UserPool
+  USER_POOL_CLIENT_ID: !Ref UserPoolClient
 
 httpApi:
   cors: true
@@ -38,3 +42,24 @@ iam:
           - dynamodb:GetItem
           - dynamodb:Query
         Resource: !GetAtt DetectionsTable.Arn
+      - Effect: Allow
+        Action:
+          - dynamodb:PutItem
+          - dynamodb:GetItem
+          - dynamodb:UpdateItem
+        Resource: !GetAtt UsersTable.Arn
+      # SignUp and ConfirmSignUp are unauthenticated Cognito APIs, but the
+      # SDK signs every request with the role's credentials — granting them
+      # explicitly avoids a confusing AccessDenied. AdminInitiateAuth is
+      # genuinely IAM-gated: it is what makes the sign-in path callable
+      # only by this Lambda.
+      - Effect: Allow
+        Action:
+          - cognito-idp:SignUp
+          - cognito-idp:ConfirmSignUp
+          - cognito-idp:ResendConfirmationCode
+          - cognito-idp:AdminInitiateAuth
+          - cognito-idp:AdminGetUser
+          - cognito-idp:ForgotPassword
+          - cognito-idp:ConfirmForgotPassword
+        Resource: !GetAtt UserPool.Arn

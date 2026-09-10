@@ -13,11 +13,7 @@ export function identifyRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const data = await request.file();
 
-      const queryResult = locationSchema.safeParse(request.query);
-
-      if (!queryResult.success) {
-        throw queryResult.error;
-      }
+      const { latitude, longitude } = locationSchema.parse(request.query);
 
       if (!data) {
         throw new Error("No file uploaded");
@@ -25,18 +21,10 @@ export function identifyRoutes(app: FastifyInstance) {
 
       const imageBuffer = await data.toBuffer();
 
-      const { latitude, longitude } = queryResult.data;
       const location =
         latitude && longitude ? { latitude, longitude } : undefined;
 
-      const validationResult = identifyRequestSchema.safeParse({
-        image: data,
-        location,
-      });
-
-      if (!validationResult.success) {
-        throw validationResult.error;
-      }
+      identifyRequestSchema.parse({ image: data, location });
 
       const result = await controller.identify({
         imageData: imageBuffer,

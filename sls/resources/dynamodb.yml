@@ -11,3 +11,21 @@ Resources:
       KeySchema:
         - AttributeName: id
           KeyType: HASH
+
+  # App profile data, one row per user. Cognito holds the credentials;
+  # this holds everything Cognito is a bad database for — display name,
+  # preferences, and later a join to the user's detections.
+  #
+  # The key is Cognito's `sub`, not the email: emails change, and a
+  # changed email would orphan every row keyed on the old one.
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ${self:custom.usersTable}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH

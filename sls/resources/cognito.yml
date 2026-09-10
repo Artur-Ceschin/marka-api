@@ -1,0 +1,65 @@
+Resources:
+  # Cognito owns credentials: password hashing, token signing, refresh
+  # tokens, password reset. Never store a password in DynamoDB.
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: ${self:custom.userPool}
+
+      # Email IS the username. Without this, Cognito wants a separate
+      # username and email becomes just another attribute.
+      UsernameAttributes:
+        - email
+
+      # This is what makes Cognito send the 6-digit confirmation code.
+      # Drop it and every new user is stuck UNCONFIRMED forever.
+      AutoVerifiedAttributes:
+        - email
+
+      # Stated explicitly so it matches the Zod schema at the API boundary.
+      # If Cognito is stricter than Zod, users get a 500 from Cognito
+      # instead of a clean 400 from us.
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+
+      # Only we can create users — no self-service admin surface.
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+
+      # Cognito's built-in email sender is capped at ~50 messages/day.
+      # Fine for dev; production needs EmailSendingAccount: DEVELOPER + SES.
+      EmailConfiguration:
+        EmailSendingAccount: COGNITO_DEFAULT
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: ${self:custom.userPoolClient}
+      UserPoolId: !Ref UserPool
+
+      # No secret: our Lambda authenticates to Cognito with its IAM role,
+      # so a client secret would add a SECRET_HASH computation and an
+      # env-var secret to manage, for no extra protection.
+      GenerateSecret: false
+
+      # ALLOW_USER_PASSWORD_AUTH is deliberately absent. Without it, holding
+      # the (public) client id is not enough to trade a password for tokens
+      # — password auth must go through AdminInitiateAuth, which is
+      # IAM-signed and therefore only callable by our Lambda.
+      ExplicitAuthFlows:
+        - ALLOW_ADMIN_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+
+      # Don't reveal whether an email exists on failed sign-in.
+      PreventUserExistenceErrors: ENABLED
+
+Outputs:
+  UserPoolId:
+    Value: !Ref UserPool
+  UserPoolClientId:
+    Value: !Ref UserPoolClient
