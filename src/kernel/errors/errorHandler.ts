@@ -38,22 +38,13 @@ export class ErrorHandler {
     };
   }
 
-  /**
-   * The deliberate exception to hiding `details` in production.
-   *
-   * A 400 describes what the *caller* sent, and a Zod issue carries only the
-   * field path and a message we wrote — never the submitted value. Hiding it
-   * leaks nothing and helps no one: the client is left unable to say which
-   * field failed, which pushes it to re-implement our validation rules and
-   * drift from them. A 500 stays opaque because its message can carry
-   * internals; a 400 has none to carry.
-   */
   private handleValidationError = (
     error: ZodError,
     reply: FastifyReply,
   ): void => {
+    // Details ship in production too: a 400 describes what the caller sent,
+    // so it carries nothing internal. A 500 stays opaque.
     const details = error.issues.map((issue) => ({
-      // Empty path means the failure is the body itself, not a field in it.
       field: issue.path.join(".") || "(body)",
       message: issue.message,
     }));

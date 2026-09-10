@@ -1,7 +1,4 @@
 Resources:
-  # HTTP API custom domains are REGIONAL — API Gateway terminates TLS itself
-  # and hands you a d-xxxx.execute-api target to point DNS at. CloudFront is
-  # only involved for edge-optimized REST APIs, which this is not.
   ApiDomainName:
     Type: AWS::ApiGatewayV2::DomainName
     Properties:
@@ -11,8 +8,6 @@ Resources:
           EndpointType: REGIONAL
           SecurityPolicy: TLS_1_2
 
-  # Binds the domain to this API's $default stage. Without the mapping the
-  # domain resolves and completes TLS, then returns 404 for every path.
   ApiMapping:
     Type: AWS::ApiGatewayV2::ApiMapping
     DependsOn: HttpApiStage

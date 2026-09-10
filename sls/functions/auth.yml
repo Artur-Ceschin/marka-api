@@ -5,8 +5,8 @@ package:
   patterns:
     - "!**"
     - "dist/auth.mjs"
-# A route with no httpApi event here is unreachable, however correctly it
-# is registered in Fastify — API Gateway simply never forwards to it.
+# A route with no httpApi event here is unreachable, however correctly it is
+# registered in Fastify.
 events:
   - httpApi: "POST /auth/signup"
   - httpApi: "POST /auth/confirm"

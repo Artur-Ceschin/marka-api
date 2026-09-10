@@ -7,11 +7,6 @@ import { createLogger } from "@/shared/logger";
 
 type Plugin = FastifyPluginAsync | FastifyPluginCallback;
 
-/**
- * Builds a Fastify app with only the plugins/routes it needs.
- * Each Lambda entry point passes its own slice, so auth doesn't
- * carry multipart and identify doesn't carry auth routes.
- */
 export function buildApp(plugins: Plugin[]) {
   const app = fastify({ logger: true });
 

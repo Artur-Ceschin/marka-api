@@ -16,4 +16,5 @@ resources:
   - ${file(./sls/resources/s3.yml)}
   - ${file(./sls/resources/dynamodb.yml)}
   - ${file(./sls/resources/cognito.yml)}
+  - ${file(./sls/resources/ses.yml)}
   - ${file(./sls/resources/domain.yml)}

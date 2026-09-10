@@ -5,9 +5,9 @@ import { identifyRoutes } from "@/main/routes/identify";
 
 const { app } = buildApp([multipart, identifyRoutes]);
 
-// Without this, API Gateway's base64 body reaches Fastify as a string
-// and data.toBuffer() yields garbage instead of a JPEG.
 export const handler = awsLambdaFastify(app, {
+  // Without these, API Gateway's base64 body reaches Fastify as a string and
+  // toBuffer() yields garbage instead of a JPEG.
   binaryMimeTypes: ["image/jpeg", "image/png", "image/webp"],
 });
 

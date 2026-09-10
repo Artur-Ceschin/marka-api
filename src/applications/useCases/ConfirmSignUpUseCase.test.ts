@@ -31,9 +31,6 @@ describe("ConfirmSignUpUseCase", () => {
 
     await new ConfirmSignUpUseCase(makeCognito(), users).execute(INPUT);
 
-    // ConfirmSignUp identifies the user by email but tells us nothing about
-    // them; the DynamoDB row is keyed on sub. This is the lookup that bridges
-    // the two, and getting it wrong would update no row at all.
     assert.deepEqual(users.verified, [SUB]);
   });
 
@@ -49,8 +46,6 @@ describe("ConfirmSignUpUseCase", () => {
       new ConfirmSignUpUseCase(cognito, users).execute(INPUT),
     );
 
-    // Cognito is the source of truth. If it did not confirm, our copy of
-    // the flag must not claim otherwise.
     assert.deepEqual(users.verified, []);
   });
 });

@@ -7,6 +7,8 @@ import { SignUpUseCase } from "@/applications/useCases/SignUpUseCase";
 import { CognitoGateway } from "@/infra/gateways/cognito";
 import { UsersRepository } from "@/infra/repositories/usersRepository";
 
+// Built on first request, not at import: server.ts loads every route in one
+// process, so eager construction would break /health when Cognito env is unset.
 let controller: AuthController | null = null;
 
 export function makeAuthController(): AuthController {

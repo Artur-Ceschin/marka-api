@@ -1,0 +1,78 @@
+Resources:
+  SesDomainIdentity:
+    Type: AWS::SES::EmailIdentity
+    Properties:
+      EmailIdentity: ${self:custom.sesDomain}
+
+      DkimAttributes:
+        SigningEnabled: true
+      DkimSigningAttributes:
+        NextSigningKeyLength: RSA_2048_BIT
+      MailFromAttributes:
+        MailFromDomain: ${self:custom.mailFromDomain}
+        BehaviorOnMxFailure: USE_DEFAULT_VALUE
+
+  EmailEventsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: ${self:custom.emailEventsTopic}
+      DisplayName: Marka email events
+
+  # Without this policy the event destination is created and then silently
+  # delivers nothing.
+  EmailEventsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref EmailEventsTopic
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ses.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref EmailEventsTopic
+            Condition:
+              StringEquals:
+                AWS:SourceAccount: !Ref AWS::AccountId
+
+  EmailConfigurationSet:
+    Type: AWS::SES::ConfigurationSet
+    Properties:
+      Name: ${self:custom.emailConfigSet}
+      ReputationOptions:
+        ReputationMetricsEnabled: true
+
+  EmailEventDestination:
+    Type: AWS::SES::ConfigurationSetEventDestination
+    Properties:
+      ConfigurationSetName: !Ref EmailConfigurationSet
+      EventDestination:
+        Name: bounces-and-complaints
+        Enabled: true
+        MatchingEventTypes:
+          - BOUNCE
+          - COMPLAINT
+          - REJECT
+          - RENDERING_FAILURE
+          - DELIVERY_DELAY
+        SnsDestination:
+          TopicARN: !Ref EmailEventsTopic
+
+Outputs:
+  DkimRecord1Name:
+    Value: !GetAtt SesDomainIdentity.DkimDNSTokenName1
+  DkimRecord1Value:
+    Value: !GetAtt SesDomainIdentity.DkimDNSTokenValue1
+  DkimRecord2Name:
+    Value: !GetAtt SesDomainIdentity.DkimDNSTokenName2
+  DkimRecord2Value:
+    Value: !GetAtt SesDomainIdentity.DkimDNSTokenValue2
+  DkimRecord3Name:
+    Value: !GetAtt SesDomainIdentity.DkimDNSTokenName3
+  DkimRecord3Value:
+    Value: !GetAtt SesDomainIdentity.DkimDNSTokenValue3
+  EmailEventsTopicArn:
+    Description: Subscribe here to receive bounce and complaint notifications
+    Value: !Ref EmailEventsTopic

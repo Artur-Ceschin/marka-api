@@ -52,11 +52,6 @@ export interface ResetPasswordRequest {
   password: string;
 }
 
-/**
- * Both password-reset responses are intentionally featureless. Anything that
- * varies by whether the email is registered turns the endpoint into a way to
- * test which addresses have accounts.
- */
 export interface ForgotPasswordResponse {
   success: true;
   message: string;

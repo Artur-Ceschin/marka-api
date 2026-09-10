@@ -1,6 +1,4 @@
 Resources:
-  # Plant photos. Private — reads go through presigned URLs, never
-  # public bucket access.
   PlantsBucket:
     Type: AWS::S3::Bucket
     Properties:

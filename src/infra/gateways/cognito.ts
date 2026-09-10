@@ -156,6 +156,8 @@ export class CognitoGateway {
         }),
       );
     } catch (error) {
+      // Resolve for unknown emails on purpose: differing responses here would
+      // let anyone test which addresses have accounts.
       if (error instanceof Error && error.name === "UserNotFoundException") {
         return;
       }
@@ -187,6 +189,8 @@ export class CognitoGateway {
         new AdminInitiateAuthCommand({
           UserPoolId: this.userPoolId,
           ClientId: this.clientId,
+          // Admin flow is IAM-signed, so the client id alone cannot trade a
+          // password for tokens. The pool client does not allow the plain flow.
           AuthFlow: "ADMIN_USER_PASSWORD_AUTH",
           AuthParameters: { USERNAME: email, PASSWORD: password },
         }),

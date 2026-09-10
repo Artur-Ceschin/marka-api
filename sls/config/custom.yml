@@ -7,3 +7,11 @@ certificateArn: arn:aws:acm:us-east-1:058264487329:certificate/8a7230a3-46bd-484
 userPool: ${self:service}-user-pool-${sls:stage}
 userPoolClient: ${self:service}-api-${sls:stage}
 usersTable: ${self:service}-users-${sls:stage}
+
+sesDomain: markaplant.app
+mailFromDomain: mail.markaplant.app
+fromEmail: noreply@markaplant.app
+fromName: Marka
+
+emailEventsTopic: ${self:service}-email-events-${sls:stage}
+emailConfigSet: ${self:service}-${sls:stage}

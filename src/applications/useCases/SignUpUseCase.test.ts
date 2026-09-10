@@ -6,10 +6,6 @@ import { UserProfile } from "@/shared/types/auth";
 const SUB = "8f2c1e94-0000-4a1b-9c3d-abc123456789";
 const INPUT = { email: "artur@example.com", password: "Supersecret1" };
 
-/**
- * Fakes rather than mocks: they record what happened so the test can assert
- * on the *result*, not on how many times a spy was called.
- */
 function makeCognito(overrides: { signUp?: () => Promise<string> } = {}) {
   const calls: string[] = [];
 
@@ -80,8 +76,6 @@ describe("SignUpUseCase", () => {
 
     await assert.rejects(() => new SignUpUseCase(failing, users).execute(INPUT));
 
-    // The ordering guarantee: Cognito owns the uniqueness check, so a
-    // rejected sign-up must never leave an orphaned profile row behind.
     assert.equal(users.created.length, 0);
   });
 
@@ -96,9 +90,6 @@ describe("SignUpUseCase", () => {
       new SignUpUseCase(cognito, failing).execute(INPUT),
     );
 
-    // Documents the known gap: there is no transaction across Cognito and
-    // DynamoDB, so the Cognito user survives this failure and a retry gets
-    // a 409. If that ever bites, the fix is a PostConfirmation trigger.
     assert.deepEqual(cognito.calls, [INPUT.email]);
   });
 });

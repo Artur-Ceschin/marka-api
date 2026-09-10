@@ -3,15 +3,11 @@ import { describe, it } from "node:test";
 import type { CognitoIdentityProviderClient } from "@aws-sdk/client-cognito-identity-provider";
 import { AppError } from "@/kernel/errors/AppError";
 
-// env.ts validates at module load, so these must be set before the gateway
-// is imported. node:test runs each file in its own process, so this is local
-// to this suite.
 process.env.USER_POOL_ID = "us-east-1_test";
 process.env.USER_POOL_CLIENT_ID = "testclient";
 
 const { CognitoGateway } = await import("@/infra/gateways/cognito");
 
-/** An AWS SDK error is identified by `name`, not by its class. */
 function awsError(name: string): Error {
   const error = new Error(name);
   error.name = name;
@@ -31,9 +27,6 @@ function gatewayThatThrows(error?: Error) {
 
 describe("CognitoGateway.forgotPassword", () => {
   it("resolves when the email has no account", async () => {
-    // The anti-enumeration guarantee. If this ever throws, /auth/forgot-password
-    // starts answering differently for registered and unregistered addresses,
-    // which turns it into a way to harvest which emails have accounts.
     await gatewayThatThrows(awsError("UserNotFoundException")).forgotPassword({
       email: "nobody@example.com",
     });

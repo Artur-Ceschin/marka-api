@@ -2,33 +2,38 @@ name: aws
 runtime: nodejs22.x
 region: us-east-1
 profile: marka
-# Graviton: ~20% cheaper. Safe here because the bundles are pure JS.
 architecture: arm64
 
 environment:
   NODE_ENV: production
-  # Ref returns the resource's real name, resolved by CloudFormation at
-  # deploy time. Deriving these from ${aws:accountId} instead would be
-  # wrong whenever the default AWS profile differs from `marka`.
   PLANTS_BUCKET: !Ref PlantsBucket
   DETECTIONS_TABLE: !Ref DetectionsTable
   USERS_TABLE: !Ref UsersTable
-  # Ref on a UserPool returns its id; Ref on a client returns the client id.
   USER_POOL_ID: !Ref UserPool
   USER_POOL_CLIENT_ID: !Ref UserPoolClient
 
 httpApi:
   cors: true
+  # Cognito ID tokens carry `aud`; access tokens carry `client_id` and are
+  # rejected here. Clients must send the idToken.
+  authorizers:
+    cognitoJwt:
+      type: jwt
+      identitySource: $request.header.Authorization
+      issuerUrl:
+        Fn::Join:
+          - ""
+          - - "https://cognito-idp."
+            - !Ref AWS::Region
+            - ".amazonaws.com/"
+            - !Ref UserPool
+      audience:
+        - !Ref UserPoolClient
 
 iam:
   role:
-    # One role shared by all three functions. Splitting it per-function
-    # needs a plugin, and isn't worth it until a function handles data
-    # the others shouldn't touch.
-    #
-    # ARNs come from GetAtt rather than a hand-built string, so they always
-    # name the account being deployed into. Fn::Join (not Fn::Sub) because
-    # Serverless would try to resolve a ${...} inside Sub as its own variable.
+    # ARNs come from GetAtt, never ${aws:accountId} — the default profile is a
+    # different account. Fn::Join not Fn::Sub: Serverless eats ${...} in Sub.
     statements:
       - Effect: Allow
         Action:
@@ -48,11 +53,6 @@ iam:
           - dynamodb:GetItem
           - dynamodb:UpdateItem
         Resource: !GetAtt UsersTable.Arn
-      # SignUp and ConfirmSignUp are unauthenticated Cognito APIs, but the
-      # SDK signs every request with the role's credentials — granting them
-      # explicitly avoids a confusing AccessDenied. AdminInitiateAuth is
-      # genuinely IAM-gated: it is what makes the sign-in path callable
-      # only by this Lambda.
       - Effect: Allow
         Action:
           - cognito-idp:SignUp
