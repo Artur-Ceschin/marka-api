@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { beforeEach, describe, it } from "node:test";
-import { SignUpUseCase } from "@/applications/useCases/SignUpUseCase";
+import { SignUpUseCase } from "@/applications/useCases/auth/SignUpUseCase";
 import { UserProfile } from "@/shared/types/auth";
 
 const SUB = "8f2c1e94-0000-4a1b-9c3d-abc123456789";

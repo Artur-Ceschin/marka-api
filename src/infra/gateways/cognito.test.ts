@@ -25,6 +25,12 @@ function gatewayThatThrows(error?: Error) {
   return new CognitoGateway(fake as unknown as CognitoIdentityProviderClient);
 }
 
+function gatewayThatReturns(response: unknown) {
+  const fake = { send: async () => response };
+
+  return new CognitoGateway(fake as unknown as CognitoIdentityProviderClient);
+}
+
 describe("CognitoGateway.forgotPassword", () => {
   it("resolves when the email has no account", async () => {
     await gatewayThatThrows(awsError("UserNotFoundException")).forgotPassword({
@@ -78,6 +84,61 @@ describe("CognitoGateway error mapping", () => {
       (error: unknown) => {
         assert.equal(error, boom);
         assert.ok(!(error instanceof AppError));
+        return true;
+      },
+    );
+  });
+});
+
+describe("CognitoGateway.resendConfirmationCode", () => {
+  it("resolves when the email has no account", async () => {
+    await gatewayThatThrows(
+      awsError("UserNotFoundException"),
+    ).resendConfirmationCode({ email: "nobody@example.com" });
+  });
+
+  it("surfaces rate limiting rather than swallowing it", async () => {
+    await assert.rejects(
+      () =>
+        gatewayThatThrows(
+          awsError("LimitExceededException"),
+        ).resendConfirmationCode({ email: "artur@example.com" }),
+      (error: unknown) => {
+        assert.ok(error instanceof AppError);
+        assert.equal(error.statusCode, 429);
+        return true;
+      },
+    );
+  });
+});
+
+describe("CognitoGateway.refresh", () => {
+  it("returns new access and id tokens", async () => {
+    const tokens = await gatewayThatReturns({
+      AuthenticationResult: {
+        AccessToken: "new-access",
+        IdToken: "new-id",
+        ExpiresIn: 3600,
+      },
+    }).refresh({ refreshToken: "valid-refresh" });
+
+    assert.deepEqual(tokens, {
+      accessToken: "new-access",
+      idToken: "new-id",
+      expiresIn: 3600,
+    });
+  });
+
+  it("reports an expired refresh token as SESSION_EXPIRED, not bad credentials", async () => {
+    await assert.rejects(
+      () =>
+        gatewayThatThrows(awsError("NotAuthorizedException")).refresh({
+          refreshToken: "expired",
+        }),
+      (error: unknown) => {
+        assert.ok(error instanceof AppError);
+        assert.equal(error.statusCode, 401);
+        assert.equal(error.code, "SESSION_EXPIRED");
         return true;
       },
     );

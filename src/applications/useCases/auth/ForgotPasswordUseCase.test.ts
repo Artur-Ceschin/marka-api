@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { ForgotPasswordUseCase } from "@/applications/useCases/ForgotPasswordUseCase";
+import { ForgotPasswordUseCase } from "@/applications/useCases/auth/ForgotPasswordUseCase";
 
 describe("ForgotPasswordUseCase", () => {
   it("responds identically whether or not the email has an account", async () => {

@@ -5,6 +5,7 @@ import {
   AdminInitiateAuthCommand,
   CognitoIdentityProviderClient,
   ConfirmSignUpCommand,
+  ResendConfirmationCodeCommand,
   SignUpCommand,
 } from "@aws-sdk/client-cognito-identity-provider";
 import { AppError } from "@/kernel/errors/AppError";
@@ -13,6 +14,9 @@ import {
   AuthTokens,
   ConfirmSignUpRequest,
   ForgotPasswordRequest,
+  RefreshRequest,
+  RefreshResponse,
+  ResendCodeRequest,
   ResetPasswordRequest,
   SignInRequest,
   SignUpRequest,
@@ -211,6 +215,66 @@ export class CognitoGateway {
       refreshToken: result.RefreshToken,
       expiresIn: result.ExpiresIn ?? 3600,
     };
+  }
+
+  async resendConfirmationCode({ email }: ResendCodeRequest): Promise<void> {
+    try {
+      await this.client.send(
+        new ResendConfirmationCodeCommand({
+          ClientId: this.clientId,
+          Username: email,
+        }),
+      );
+    } catch (error) {
+      // Same reasoning as forgotPassword: resolve for unknown emails so the
+      // endpoint cannot be used to test which addresses have accounts.
+      if (error instanceof Error && error.name === "UserNotFoundException") {
+        return;
+      }
+
+      throw this.toAppError(error);
+    }
+  }
+
+  async refresh({
+    refreshToken,
+  }: RefreshRequest): Promise<Omit<RefreshResponse, "success">> {
+    try {
+      const response = await this.client.send(
+        new AdminInitiateAuthCommand({
+          UserPoolId: this.userPoolId,
+          ClientId: this.clientId,
+          AuthFlow: "REFRESH_TOKEN_AUTH",
+          AuthParameters: { REFRESH_TOKEN: refreshToken },
+        }),
+      );
+
+      const result = response.AuthenticationResult;
+
+      // Cognito does not rotate the refresh token, so none comes back here.
+      if (!result?.AccessToken || !result.IdToken) {
+        throw new Error("Cognito returned no tokens for a refresh");
+      }
+
+      return {
+        accessToken: result.AccessToken,
+        idToken: result.IdToken,
+        expiresIn: result.ExpiresIn ?? 3600,
+      };
+    } catch (error) {
+      // NotAuthorizedException here means the refresh token is expired or
+      // revoked — not a bad password. The shared map's wording would send the
+      // client to the wrong recovery path.
+      if (error instanceof Error && error.name === "NotAuthorizedException") {
+        throw new AppError(
+          401,
+          "SESSION_EXPIRED",
+          "Your session has expired. Sign in again",
+        );
+      }
+
+      throw this.toAppError(error);
+    }
   }
 
   private async mapErrors<T>(operation: () => Promise<T>): Promise<T> {

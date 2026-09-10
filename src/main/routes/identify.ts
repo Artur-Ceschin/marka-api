@@ -1,5 +1,5 @@
 import { IdentifyController } from "@/applications/controllers/IdentifyController";
-import { IdentifyPlantUseCase } from "@/applications/useCases/IdentifyPlantUseCase";
+import { IdentifyPlantUseCase } from "@/applications/useCases/identify/IdentifyPlantUseCase";
 import { identifyRequestSchema, locationSchema } from "@/applications/schemas/identify";
 import { plantIdentification } from "@/infra/gateways/plantNet";
 import { plantBucket } from "@/infra/clients/s3";

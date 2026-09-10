@@ -8,7 +8,7 @@
     "build": "node esbuild.config.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "tsx --test src/**/*.test.ts",
+    "test": "tsx --test \"src/**/*.test.ts\"",
     "test:bundle": "pnpm build && NODE_ENV=production node --test scripts/bundle.test.mjs",
     "sls:print": "AWS_PROFILE=marka serverless print",
     "sls:deploy": "pnpm build && AWS_PROFILE=marka serverless deploy",

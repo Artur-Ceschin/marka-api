@@ -1,13 +1,19 @@
-import { ConfirmSignUpUseCase } from "@/applications/useCases/ConfirmSignUpUseCase";
-import { ForgotPasswordUseCase } from "@/applications/useCases/ForgotPasswordUseCase";
-import { ResetPasswordUseCase } from "@/applications/useCases/ResetPasswordUseCase";
-import { SignInUseCase } from "@/applications/useCases/SignInUseCase";
-import { SignUpUseCase } from "@/applications/useCases/SignUpUseCase";
+import { ConfirmSignUpUseCase } from "@/applications/useCases/auth/ConfirmSignUpUseCase";
+import { ForgotPasswordUseCase } from "@/applications/useCases/auth/ForgotPasswordUseCase";
+import { RefreshTokenUseCase } from "@/applications/useCases/auth/RefreshTokenUseCase";
+import { ResendCodeUseCase } from "@/applications/useCases/auth/ResendCodeUseCase";
+import { ResetPasswordUseCase } from "@/applications/useCases/auth/ResetPasswordUseCase";
+import { SignInUseCase } from "@/applications/useCases/auth/SignInUseCase";
+import { SignUpUseCase } from "@/applications/useCases/auth/SignUpUseCase";
 import {
   ConfirmSignUpRequest,
   ConfirmSignUpResponse,
   ForgotPasswordRequest,
   ForgotPasswordResponse,
+  RefreshRequest,
+  RefreshResponse,
+  ResendCodeRequest,
+  ResendCodeResponse,
   ResetPasswordRequest,
   ResetPasswordResponse,
   SignInRequest,
@@ -23,6 +29,8 @@ export class AuthController {
     private signInUseCase: SignInUseCase,
     private forgotPasswordUseCase: ForgotPasswordUseCase,
     private resetPasswordUseCase: ResetPasswordUseCase,
+    private refreshTokenUseCase: RefreshTokenUseCase,
+    private resendCodeUseCase: ResendCodeUseCase,
   ) {}
 
   async signUp(request: SignUpRequest): Promise<SignUpResponse> {
@@ -49,5 +57,13 @@ export class AuthController {
     request: ResetPasswordRequest,
   ): Promise<ResetPasswordResponse> {
     return this.resetPasswordUseCase.execute(request);
+  }
+
+  async refresh(request: RefreshRequest): Promise<RefreshResponse> {
+    return this.refreshTokenUseCase.execute(request);
+  }
+
+  async resendCode(request: ResendCodeRequest): Promise<ResendCodeResponse> {
+    return this.resendCodeUseCase.execute(request);
   }
 }

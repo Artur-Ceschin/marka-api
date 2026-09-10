@@ -1,5 +1,7 @@
 import {
   confirmSignUpSchema,
+  refreshSchema,
+  resendCodeSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
   signInSchema,
@@ -59,6 +61,28 @@ export function authRoutes(app: FastifyInstance) {
       const body = signInSchema.parse(request.body);
 
       const response = await makeAuthController().signIn(body);
+
+      reply.status(200).send(response);
+    },
+  );
+
+  app.post(
+    "/auth/refresh",
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const body = refreshSchema.parse(request.body);
+
+      const response = await makeAuthController().refresh(body);
+
+      reply.status(200).send(response);
+    },
+  );
+
+  app.post(
+    "/auth/resend-code",
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const body = resendCodeSchema.parse(request.body);
+
+      const response = await makeAuthController().resendCode(body);
 
       reply.status(200).send(response);
     },

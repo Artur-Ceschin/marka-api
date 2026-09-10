@@ -1,5 +1,5 @@
 import { IdentifyPlantRequest, IdentifyPlantResponse } from "@/shared/types/plant";
-import { IdentifyPlantUseCase } from "../useCases/IdentifyPlantUseCase";
+import { IdentifyPlantUseCase } from "@/applications/useCases/identify/IdentifyPlantUseCase";
 
 export class IdentifyController {
   constructor(private identifyUseCase: IdentifyPlantUseCase) {}

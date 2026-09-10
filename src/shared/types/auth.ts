@@ -61,3 +61,23 @@ export interface ResetPasswordResponse {
   success: true;
   message: string;
 }
+
+export interface RefreshRequest {
+  refreshToken: string;
+}
+
+export interface ResendCodeRequest {
+  email: string;
+}
+
+export interface RefreshResponse {
+  success: true;
+  accessToken: string;
+  idToken: string;
+  expiresIn: number;
+}
+
+export interface ResendCodeResponse {
+  success: true;
+  message: string;
+}

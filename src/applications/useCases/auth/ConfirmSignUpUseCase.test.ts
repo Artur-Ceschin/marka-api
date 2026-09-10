@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { ConfirmSignUpUseCase } from "@/applications/useCases/ConfirmSignUpUseCase";
+import { ConfirmSignUpUseCase } from "@/applications/useCases/auth/ConfirmSignUpUseCase";
 
 const SUB = "8f2c1e94-0000-4a1b-9c3d-abc123456789";
 const INPUT = { email: "artur@example.com", code: "123456" };

@@ -13,3 +13,5 @@ events:
   - httpApi: "POST /auth/signin"
   - httpApi: "POST /auth/forgot-password"
   - httpApi: "POST /auth/reset-password"
+  - httpApi: "POST /auth/refresh"
+  - httpApi: "POST /auth/resend-code"
