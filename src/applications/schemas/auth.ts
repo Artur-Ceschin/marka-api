@@ -42,11 +42,11 @@ const resendCodeSchema = z.object({
 });
 
 export {
-  refreshSchema,
-  resendCodeSchema,
-  signUpSchema,
-  signInSchema,
   confirmSignUpSchema,
   forgotPasswordSchema,
+  refreshSchema,
+  resendCodeSchema,
   resetPasswordSchema,
+  signInSchema,
+  signUpSchema,
 };

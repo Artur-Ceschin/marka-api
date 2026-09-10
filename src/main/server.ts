@@ -1,7 +1,7 @@
 import multipart from "@fastify/multipart";
 import { buildApp } from "@/main/app";
-import { healthRoutes } from "@/main/routes/health";
 import { authRoutes } from "@/main/routes/auth";
+import { healthRoutes } from "@/main/routes/health";
 import { identifyRoutes } from "@/main/routes/identify";
 import { env } from "@/shared/env";
 

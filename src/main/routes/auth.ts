@@ -1,14 +1,14 @@
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   confirmSignUpSchema,
+  forgotPasswordSchema,
   refreshSchema,
   resendCodeSchema,
-  forgotPasswordSchema,
   resetPasswordSchema,
   signInSchema,
   signUpSchema,
 } from "@/applications/schemas/auth";
 import { makeAuthController } from "@/main/factories/makeAuthController";
-import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 
 export function authRoutes(app: FastifyInstance) {
   app.post(

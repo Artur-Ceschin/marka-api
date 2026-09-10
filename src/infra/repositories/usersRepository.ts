@@ -1,7 +1,7 @@
 import { PutCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { dynamoClient } from "@/infra/clients/dynamo";
 import { env } from "@/shared/env";
-import { UserProfile } from "@/shared/types/auth";
+import type { UserProfile } from "@/shared/types/auth";
 
 export class UsersRepository {
   private readonly table: string;

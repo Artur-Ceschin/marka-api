@@ -1,11 +1,11 @@
-import { ConfirmSignUpUseCase } from "@/applications/useCases/auth/ConfirmSignUpUseCase";
-import { ForgotPasswordUseCase } from "@/applications/useCases/auth/ForgotPasswordUseCase";
-import { RefreshTokenUseCase } from "@/applications/useCases/auth/RefreshTokenUseCase";
-import { ResendCodeUseCase } from "@/applications/useCases/auth/ResendCodeUseCase";
-import { ResetPasswordUseCase } from "@/applications/useCases/auth/ResetPasswordUseCase";
-import { SignInUseCase } from "@/applications/useCases/auth/SignInUseCase";
-import { SignUpUseCase } from "@/applications/useCases/auth/SignUpUseCase";
-import {
+import type { ConfirmSignUpUseCase } from "@/applications/useCases/auth/ConfirmSignUpUseCase";
+import type { ForgotPasswordUseCase } from "@/applications/useCases/auth/ForgotPasswordUseCase";
+import type { RefreshTokenUseCase } from "@/applications/useCases/auth/RefreshTokenUseCase";
+import type { ResendCodeUseCase } from "@/applications/useCases/auth/ResendCodeUseCase";
+import type { ResetPasswordUseCase } from "@/applications/useCases/auth/ResetPasswordUseCase";
+import type { SignInUseCase } from "@/applications/useCases/auth/SignInUseCase";
+import type { SignUpUseCase } from "@/applications/useCases/auth/SignUpUseCase";
+import type {
   ConfirmSignUpRequest,
   ConfirmSignUpResponse,
   ForgotPasswordRequest,

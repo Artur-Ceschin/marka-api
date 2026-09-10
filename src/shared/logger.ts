@@ -1,7 +1,7 @@
-import { FastifyInstance } from "fastify";
+import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 
 export class Logger {
-  constructor(private fastifyLogger: any) {}
+  constructor(private fastifyLogger: FastifyBaseLogger) {}
 
   info(message: string, context?: Record<string, unknown>) {
     this.fastifyLogger.info({ msg: message, ...context });

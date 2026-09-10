@@ -1,9 +1,12 @@
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { IdentifyController } from "@/applications/controllers/IdentifyController";
+import {
+  identifyRequestSchema,
+  locationSchema,
+} from "@/applications/schemas/identify";
 import { IdentifyPlantUseCase } from "@/applications/useCases/identify/IdentifyPlantUseCase";
-import { identifyRequestSchema, locationSchema } from "@/applications/schemas/identify";
-import { plantIdentification } from "@/infra/gateways/plantNet";
 import { plantBucket } from "@/infra/clients/s3";
-import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import { plantIdentification } from "@/infra/gateways/plantNet";
 
 export function identifyRoutes(app: FastifyInstance) {
   const useCase = new IdentifyPlantUseCase(plantBucket, plantIdentification);

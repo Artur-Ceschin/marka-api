@@ -45,10 +45,10 @@ const optionsSchema = z
   .strict();
 
 export {
-  locationSchema,
-  identifyRequestSchema,
-  plantDataSchema,
-  identifyResponseSchema,
   errorResponseSchema,
+  identifyRequestSchema,
+  identifyResponseSchema,
+  locationSchema,
   optionsSchema,
+  plantDataSchema,
 };

@@ -1,6 +1,9 @@
-import { IdentifyPlantRequest, IdentifyPlantResponse } from "@/shared/types/plant";
-import { PlantIdentification } from "@/infra/gateways/plantNet";
-import { PlantBucket } from "@/infra/clients/s3";
+import type { PlantBucket } from "@/infra/clients/s3";
+import type { PlantIdentification } from "@/infra/gateways/plantNet";
+import type {
+  IdentifyPlantRequest,
+  IdentifyPlantResponse,
+} from "@/shared/types/plant";
 
 export class IdentifyPlantUseCase {
   constructor(

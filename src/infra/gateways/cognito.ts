@@ -1,16 +1,16 @@
 import {
   AdminGetUserCommand,
-  ConfirmForgotPasswordCommand,
-  ForgotPasswordCommand,
   AdminInitiateAuthCommand,
   CognitoIdentityProviderClient,
+  ConfirmForgotPasswordCommand,
   ConfirmSignUpCommand,
+  ForgotPasswordCommand,
   ResendConfirmationCodeCommand,
   SignUpCommand,
 } from "@aws-sdk/client-cognito-identity-provider";
 import { AppError } from "@/kernel/errors/AppError";
 import { env } from "@/shared/env";
-import {
+import type {
   AuthTokens,
   ConfirmSignUpRequest,
   ForgotPasswordRequest,

@@ -1,25 +1,21 @@
 import assert from "node:assert/strict";
 import { beforeEach, describe, it } from "node:test";
 import { SignUpUseCase } from "@/applications/useCases/auth/SignUpUseCase";
-import { UserProfile } from "@/shared/types/auth";
+import type { UserProfile } from "@/shared/types/auth";
 
 const SUB = "8f2c1e94-0000-4a1b-9c3d-abc123456789";
 const INPUT = { email: "artur@example.com", password: "Supersecret1" };
 
 function makeCognito(overrides: { signUp?: () => Promise<string> } = {}) {
   const calls: string[] = [];
+  const onSignUp = overrides.signUp ?? (async () => SUB);
 
   return {
     calls,
-    signUp: overrides.signUp
-      ? async (input: typeof INPUT) => {
-          calls.push(input.email);
-          return overrides.signUp!();
-        }
-      : async (input: typeof INPUT) => {
-          calls.push(input.email);
-          return SUB;
-        },
+    signUp: async (input: typeof INPUT) => {
+      calls.push(input.email);
+      return onSignUp();
+    },
   };
 }
 
@@ -74,7 +70,9 @@ describe("SignUpUseCase", () => {
       },
     });
 
-    await assert.rejects(() => new SignUpUseCase(failing, users).execute(INPUT));
+    await assert.rejects(() =>
+      new SignUpUseCase(failing, users).execute(INPUT),
+    );
 
     assert.equal(users.created.length, 0);
   });

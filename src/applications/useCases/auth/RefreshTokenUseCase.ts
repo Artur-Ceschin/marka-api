@@ -1,5 +1,5 @@
-import { CognitoGateway } from "@/infra/gateways/cognito";
-import { RefreshRequest, RefreshResponse } from "@/shared/types/auth";
+import type { CognitoGateway } from "@/infra/gateways/cognito";
+import type { RefreshRequest, RefreshResponse } from "@/shared/types/auth";
 
 type RefreshCognito = Pick<CognitoGateway, "refresh">;
 

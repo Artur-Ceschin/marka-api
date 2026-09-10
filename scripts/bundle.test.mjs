@@ -10,9 +10,9 @@
  * Run against dist/, so it needs `pnpm build` first: `pnpm test:bundle`.
  */
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { describe, it } from "node:test";
 import { pathToFileURL } from "node:url";
 
 const DIST = join(process.cwd(), "dist");
@@ -60,7 +60,10 @@ describe("built Lambda bundles", () => {
 
   it("health responds through the aws-lambda adapter", async () => {
     const { handler } = await load("health");
-    const res = await handler(buildEvent({ method: "GET", path: "/health" }), context);
+    const res = await handler(
+      buildEvent({ method: "GET", path: "/health" }),
+      context,
+    );
 
     assert.equal(res.statusCode, 200);
   });

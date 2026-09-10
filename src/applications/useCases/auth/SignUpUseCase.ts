@@ -1,6 +1,6 @@
-import { CognitoGateway } from "@/infra/gateways/cognito";
-import { UsersRepository } from "@/infra/repositories/usersRepository";
-import { SignUpRequest, SignUpResponse } from "@/shared/types/auth";
+import type { CognitoGateway } from "@/infra/gateways/cognito";
+import type { UsersRepository } from "@/infra/repositories/usersRepository";
+import type { SignUpRequest, SignUpResponse } from "@/shared/types/auth";
 
 type SignUpCognito = Pick<CognitoGateway, "signUp">;
 type SignUpUsers = Pick<UsersRepository, "create">;

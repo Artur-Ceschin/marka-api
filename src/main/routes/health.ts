@@ -1,4 +1,4 @@
-import { FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
 import pkg from "../../../package.json" with { type: "json" };
 
 export function healthRoutes(app: FastifyInstance) {

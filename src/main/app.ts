@@ -1,6 +1,6 @@
 import fastify, {
-  FastifyPluginAsync,
-  FastifyPluginCallback,
+  type FastifyPluginAsync,
+  type FastifyPluginCallback,
 } from "fastify";
 import { ErrorHandler } from "@/kernel/errors/errorHandler";
 import { createLogger } from "@/shared/logger";

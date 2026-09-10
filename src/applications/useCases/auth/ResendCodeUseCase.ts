@@ -1,5 +1,8 @@
-import { CognitoGateway } from "@/infra/gateways/cognito";
-import { ResendCodeRequest, ResendCodeResponse } from "@/shared/types/auth";
+import type { CognitoGateway } from "@/infra/gateways/cognito";
+import type {
+  ResendCodeRequest,
+  ResendCodeResponse,
+} from "@/shared/types/auth";
 
 type ResendCognito = Pick<CognitoGateway, "resendConfirmationCode">;
 

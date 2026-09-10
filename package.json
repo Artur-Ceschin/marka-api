@@ -7,13 +7,17 @@
     "dev": "tsx watch --env-file-if-exists=.env src/main/server.ts",
     "build": "node esbuild.config.mjs",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint .",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
     "test": "tsx --test \"src/**/*.test.ts\"",
     "test:bundle": "pnpm build && NODE_ENV=production node --test scripts/bundle.test.mjs",
     "sls:print": "AWS_PROFILE=marka serverless print",
     "sls:deploy": "pnpm build && AWS_PROFILE=marka serverless deploy",
     "sls:logs": "AWS_PROFILE=marka serverless logs --tail --function",
-    "sls:remove": "AWS_PROFILE=marka serverless remove"
+    "sls:remove": "AWS_PROFILE=marka serverless remove",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm test:bundle",
+    "prepare": "husky"
   },
   "keywords": [],
   "author": "",
@@ -29,13 +33,18 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
+    "@biomejs/biome": "^2.5.13",
     "@tsconfig/node24": "^24.0.4",
     "@types/node": "^26.1.2",
     "esbuild": "^0.25.12",
-    "eslint": "^10.8.0",
-    "globals": "^17.8.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.5.1",
     "tsx": "^4.23.1",
     "typescript": "^7.0.2"
+  },
+  "lint-staged": {
+    "*.{ts,mjs,js,json}": [
+      "biome check --write --no-errors-on-unmatched"
+    ]
   }
 }

@@ -57,7 +57,9 @@ describe("CognitoGateway error mapping", () => {
   it("turns a wrong reset code into a 400, not a 500", async () => {
     await assert.rejects(
       () =>
-        gatewayThatThrows(awsError("CodeMismatchException")).confirmForgotPassword({
+        gatewayThatThrows(
+          awsError("CodeMismatchException"),
+        ).confirmForgotPassword({
           email: "artur@example.com",
           code: "123456",
           password: "Supersecret1",

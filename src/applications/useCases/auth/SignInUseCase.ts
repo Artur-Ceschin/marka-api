@@ -1,5 +1,5 @@
-import { CognitoGateway } from "@/infra/gateways/cognito";
-import { SignInRequest, SignInResponse } from "@/shared/types/auth";
+import type { CognitoGateway } from "@/infra/gateways/cognito";
+import type { SignInRequest, SignInResponse } from "@/shared/types/auth";
 
 type SignInCognito = Pick<CognitoGateway, "signIn">;
 

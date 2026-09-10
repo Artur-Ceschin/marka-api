@@ -1,4 +1,4 @@
-import { Plant } from "@/shared/types/plant";
+import type { Plant } from "@/shared/types/plant";
 
 export class PlantIdentification {
   async identify(

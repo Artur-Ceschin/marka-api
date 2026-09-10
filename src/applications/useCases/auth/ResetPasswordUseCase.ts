@@ -1,5 +1,5 @@
-import { CognitoGateway } from "@/infra/gateways/cognito";
-import {
+import type { CognitoGateway } from "@/infra/gateways/cognito";
+import type {
   ResetPasswordRequest,
   ResetPasswordResponse,
 } from "@/shared/types/auth";

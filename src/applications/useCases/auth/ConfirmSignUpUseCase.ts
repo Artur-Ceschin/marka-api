@@ -1,6 +1,6 @@
-import { CognitoGateway } from "@/infra/gateways/cognito";
-import { UsersRepository } from "@/infra/repositories/usersRepository";
-import {
+import type { CognitoGateway } from "@/infra/gateways/cognito";
+import type { UsersRepository } from "@/infra/repositories/usersRepository";
+import type {
   ConfirmSignUpRequest,
   ConfirmSignUpResponse,
 } from "@/shared/types/auth";

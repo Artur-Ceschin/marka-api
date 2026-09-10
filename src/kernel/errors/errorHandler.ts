@@ -1,7 +1,7 @@
-import { env } from "@/shared/env";
-import { AppError } from "@/kernel/errors/AppError";
-import { FastifyRequest, FastifyReply } from "fastify";
+import type { FastifyReply, FastifyRequest } from "fastify";
 import { ZodError } from "zod";
+import { AppError } from "@/kernel/errors/AppError";
+import { env } from "@/shared/env";
 
 interface ErrorHandlerReturnType {
   success: boolean;
@@ -11,7 +11,7 @@ interface ErrorHandlerReturnType {
 }
 
 export class ErrorHandler {
-  handle = (error: Error, request: FastifyRequest, reply: FastifyReply) => {
+  handle = (error: Error, _request: FastifyRequest, reply: FastifyReply) => {
     if (error instanceof ZodError) {
       return this.handleValidationError(error, reply);
     }
