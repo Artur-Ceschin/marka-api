@@ -11,6 +11,13 @@ environment:
   USERS_TABLE: !Ref UsersTable
   USER_POOL_ID: !Ref UserPool
   USER_POOL_CLIENT_ID: !Ref UserPoolClient
+  # Secrets come from SSM so they are never committed. Serverless resolves
+  # these at deploy time and bakes the value into the function's environment,
+  # so they are readable by anyone with Lambda console access — fine for a
+  # single-maintainer project, but not the same as runtime Secrets Manager.
+  # The `, ''` default keeps a deploy working before the params exist.
+  PLANTNET_API_KEY: ${ssm:/marka/${sls:stage}/plantnet-api-key, ''}
+  OPENAI_API_KEY: ${ssm:/marka/${sls:stage}/openai-api-key, ''}
 
 httpApi:
   cors: true

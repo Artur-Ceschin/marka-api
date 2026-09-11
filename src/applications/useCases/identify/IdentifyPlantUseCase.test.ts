@@ -2,15 +2,17 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { IdentifyPlantUseCase } from "@/applications/useCases/identify/IdentifyPlantUseCase";
 import { DetectionsRepository } from "@/infra/repositories/detectionsRepository";
-import type { Detection, Plant } from "@/shared/types/plant";
+import type { Detection, PlantCandidate } from "@/shared/types/plant";
 
 const USER = "b428a418-2001-70dc-2a7c-ab479eb808fc";
-const PLANTS: Plant[] = [
+const PLANTS: PlantCandidate[] = [
   {
     species: "Rosa gallica",
+    scientificName: "Rosa gallica L.",
+    commonNames: ["French rose"],
+    family: "Rosaceae",
+    genus: "Rosa",
     confidence: 0.9,
-    endemic: false,
-    plantType: "shrubs",
   },
 ];
 
@@ -19,7 +21,11 @@ function makeDeps() {
 
   return {
     saved,
-    bucket: { upload: async () => "https://s3/plants/x.jpg" },
+    bucket: {
+      assertUploaded: async () => {},
+      getObject: async () => Buffer.from("jpeg"),
+      objectUrl: (key: string) => `s3://bucket/${key}`,
+    },
     identifier: { identify: async () => PLANTS },
     detections: {
       save: async (d: Detection) => {
@@ -38,13 +44,11 @@ describe("IdentifyPlantUseCase", () => {
       deps.identifier,
       deps.detections,
       () => "2026-09-10T12:00:00.000Z#abcd1234",
-    ).execute({ userId: USER, imageData: Buffer.from("jpeg") });
+    ).execute({ userId: USER, key: `uploads/${USER}/abc` });
 
-    // Without userId on the row there is no way to read a user's own
-    // detections without scanning the whole table.
     assert.equal(deps.saved.length, 1);
     assert.equal(deps.saved[0]?.userId, USER);
-    assert.deepEqual(deps.saved[0]?.plants, PLANTS);
+    assert.deepEqual(deps.saved[0]?.candidates, PLANTS);
   });
 
   it("returns the detectionId it stored, so the client can reference it", async () => {
@@ -56,7 +60,7 @@ describe("IdentifyPlantUseCase", () => {
       deps.identifier,
       deps.detections,
       () => id,
-    ).execute({ userId: USER, imageData: Buffer.from("jpeg") });
+    ).execute({ userId: USER, key: `uploads/${USER}/abc` });
 
     assert.equal(result.detectionId, id);
     assert.equal(deps.saved[0]?.detectionId, id);

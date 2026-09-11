@@ -1,4 +1,4 @@
-import type { PlantBucket } from "@/infra/clients/s3";
+import { PlantBucket } from "@/infra/clients/s3";
 import type { PlantIdentification } from "@/infra/gateways/plantNet";
 import type { DetectionsRepository } from "@/infra/repositories/detectionsRepository";
 import type {
@@ -6,7 +6,7 @@ import type {
   IdentifyPlantResponse,
 } from "@/shared/types/plant";
 
-type Bucket = Pick<PlantBucket, "upload">;
+type Bucket = Pick<PlantBucket, "assertUploaded" | "getObject" | "objectUrl">;
 type Identifier = Pick<PlantIdentification, "identify">;
 type Detections = Pick<DetectionsRepository, "save">;
 
@@ -21,10 +21,19 @@ export class IdentifyPlantUseCase {
   async execute(
     request: IdentifyPlantRequest & { userId: string },
   ): Promise<IdentifyPlantResponse> {
-    const imageUrl = await this.plantBucket.upload(request.imageData);
+    // The key encodes its owner, so this rejects another user's key before
+    // any S3 or PlantNet call is made.
+    PlantBucket.assertOwnedBy(request.key, request.userId);
+
+    // Confirms the upload actually completed. Without it a client could send
+    // a key it never uploaded to and we would pay for the identification.
+    await this.plantBucket.assertUploaded(request.key);
+
+    const imageUrl = this.plantBucket.objectUrl(request.key);
+    const image = await this.plantBucket.getObject(request.key);
 
     const plants = await this.plantIdentification.identify(
-      imageUrl,
+      image,
       request.location,
     );
 
@@ -35,7 +44,8 @@ export class IdentifyPlantUseCase {
       userId: request.userId,
       detectionId,
       imageUrl,
-      plants,
+      candidates: plants,
+      status: "pending_confirmation",
       location: request.location,
       createdAt,
     });
@@ -43,7 +53,8 @@ export class IdentifyPlantUseCase {
     return {
       success: true,
       detectionId,
-      plant: plants,
+      candidates: plants,
+      status: "pending_confirmation",
       timestamp: createdAt,
     };
   }

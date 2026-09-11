@@ -9,6 +9,11 @@ const envSchema = z.object({
   USER_POOL_ID: z.string().optional(),
   USER_POOL_CLIENT_ID: z.string().optional(),
   AWS_REGION: z.string().default("us-east-1"),
+  // Optional so the rest of the API boots without them; the gateways fall
+  // back to fixtures and say so, rather than failing at import.
+  PLANTNET_API_KEY: z.string().optional(),
+  PLANTNET_PROJECT: z.string().default("all"),
+  OPENAI_API_KEY: z.string().optional(),
 });
 
 const _env = envSchema.safeParse(process.env);

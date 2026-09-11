@@ -7,7 +7,17 @@ package:
     - "dist/identify.mjs"
 events:
   - httpApi:
+      path: /uploads
+      method: POST
+      authorizer:
+        name: cognitoJwt
+  - httpApi:
       path: /identify
+      method: POST
+      authorizer:
+        name: cognitoJwt
+  - httpApi:
+      path: /detections/{detectionId}/confirm
       method: POST
       authorizer:
         name: cognitoJwt

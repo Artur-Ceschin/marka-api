@@ -1,34 +1,40 @@
 import z from "zod";
 
+// Both or neither: a latitude without a longitude is not a location, and
+// PlantNet cannot use half a coordinate.
 const locationSchema = z.object({
-  latitude: z.coerce.number().min(-90).max(90).optional(),
-  longitude: z.coerce.number().min(-180).max(180).optional(),
+  latitude: z.coerce.number().min(-90).max(90),
+  longitude: z.coerce.number().min(-180).max(180),
 });
 
 const identifyRequestSchema = z.object({
-  image: z.object({}),
+  // Shape only — ownership is proved against the caller in the use case.
+  key: z.string().min(1).max(512),
   location: locationSchema.optional(),
 });
 
-const plantDataSchema = z.object({
+const confirmDetectionSchema = z.object({
+  species: z.string().trim().min(1).max(256),
+});
+
+const createUploadSchema = z.object({
+  contentType: z.enum(["image/jpeg", "image/png", "image/webp"]),
+});
+
+const plantCandidateSchema = z.object({
   species: z.string().min(1),
+  scientificName: z.string(),
+  commonNames: z.string().array(),
+  family: z.string(),
+  genus: z.string(),
   confidence: z.number().min(0).max(1),
-  endemic: z.boolean(),
-  plantType: z.enum([
-    "trees",
-    "shrubs",
-    "herbs",
-    "climbers",
-    "creepers",
-    "ferns",
-    "mosses",
-    "fungi",
-  ]),
 });
 
 const identifyResponseSchema = z.object({
   success: z.boolean(),
-  plant: plantDataSchema.array(),
+  detectionId: z.string(),
+  candidates: plantCandidateSchema.array(),
+  status: z.enum(["pending_confirmation", "confirmed", "rejected"]),
   timestamp: z.string(),
 });
 
@@ -50,11 +56,13 @@ const optionsSchema = z
   .strict();
 
 export {
+  confirmDetectionSchema,
+  createUploadSchema,
   errorResponseSchema,
   identifyRequestSchema,
   identifyResponseSchema,
   listDetectionsSchema,
   locationSchema,
   optionsSchema,
-  plantDataSchema,
+  plantCandidateSchema,
 };

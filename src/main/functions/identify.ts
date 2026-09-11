@@ -1,14 +1,11 @@
 import awsLambdaFastify from "@fastify/aws-lambda";
-import multipart from "@fastify/multipart";
 import { buildApp } from "@/main/app";
 import { identifyRoutes } from "@/main/routes/identify";
 
-const { app } = buildApp([multipart, identifyRoutes]);
+// No multipart and no binaryMimeTypes: images now go straight to S3 via a
+// presigned POST, so this function only ever sees JSON carrying the key.
+const { app } = buildApp([identifyRoutes]);
 
-export const handler = awsLambdaFastify(app, {
-  // Without these, API Gateway's base64 body reaches Fastify as a string and
-  // toBuffer() yields garbage instead of a JPEG.
-  binaryMimeTypes: ["image/jpeg", "image/png", "image/webp"],
-});
+export const handler = awsLambdaFastify(app);
 
 await app.ready();

@@ -36,7 +36,7 @@ sls/                  Serverless config, split by concern
 scripts/              local tooling (synthetic Lambda invocation)
 src/
   applications/       controllers, use cases, Zod schemas
-  infra/              external integrations (PlantNet, S3) — currently mocked
+  infra/              external integrations (PlantNet, S3, Anthropic)
   kernel/             cross-cutting concerns (error handling)
   main/               composition root: app, server, routes, Lambda entry points
   shared/             env validation, logger, domain types
@@ -48,7 +48,10 @@ src/
 |---|---|---|---|
 | GET | `/health`, `/status` | health | ✅ |
 | POST | `/auth/signup`, `/auth/signin` | auth | validated, returns 501 |
-| POST | `/identify` | identify | ✅ (services mocked) |
+| POST | `/uploads` | identify | presigned S3 upload |
+| POST | `/identify` | identify | PlantNet candidates |
+| POST | `/detections/:detectionId/confirm` | identify | AI enrichment for selected species |
+| GET | `/identifications` | identify | user's detection history |
 
 ## Custom domain
 
