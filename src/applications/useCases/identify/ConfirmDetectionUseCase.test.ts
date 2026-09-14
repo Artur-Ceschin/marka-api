@@ -18,7 +18,7 @@ function detection(overrides: Partial<Detection> = {}): Detection {
   return {
     userId: USER,
     detectionId: DETECTION_ID,
-    imageUrl: `s3://marka-plants/uploads/${USER}/abc`,
+    imageKey: `detections/${USER}/abc`,
     candidates: [
       {
         species: "Rosa gallica",
@@ -38,10 +38,12 @@ function detection(overrides: Partial<Detection> = {}): Detection {
 function makeDeps(stored: Detection | null = detection()) {
   const enrichCalls: string[] = [];
   const confirmCalls: unknown[] = [];
+  const readKeys: string[] = [];
 
   return {
     enrichCalls,
     confirmCalls,
+    readKeys,
     detections: {
       findById: async () => stored ?? undefined,
       confirm: async (input: { species: string }) => {
@@ -52,7 +54,12 @@ function makeDeps(stored: Detection | null = detection()) {
         });
       },
     },
-    bucket: { getObject: async () => Buffer.from("jpeg") },
+    bucket: {
+      getObject: async (key: string) => {
+        readKeys.push(key);
+        return Buffer.from("jpeg");
+      },
+    },
     enrichment: {
       enrich: async ({ species }: { species: string }) => {
         enrichCalls.push(species);
@@ -77,6 +84,7 @@ describe("ConfirmDetectionUseCase", () => {
     });
 
     assert.deepEqual(deps.enrichCalls, ["Rosa gallica"]);
+    assert.deepEqual(deps.readKeys, [`detections/${USER}/abc`]);
     assert.equal(result.status, "confirmed");
     assert.deepEqual(result.enrichment, ENRICHMENT);
   });

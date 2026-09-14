@@ -6,7 +6,7 @@ import {
   UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
 import { dynamoClient } from "@/infra/clients/dynamo";
-import { env } from "@/shared/env";
+import { requireEnv } from "@/shared/env";
 import type {
   Detection,
   DetectionPage,
@@ -14,18 +14,7 @@ import type {
 } from "@/shared/types/plant";
 
 export class DetectionsRepository {
-  private readonly table: string;
-
-  constructor() {
-    if (!env.DETECTIONS_TABLE) {
-      throw new Error(
-        "DETECTIONS_TABLE is required. In deployed environments serverless " +
-          "injects it; locally, copy it from `pnpm sls:print` into .env",
-      );
-    }
-
-    this.table = env.DETECTIONS_TABLE;
-  }
+  private readonly table = requireEnv("DETECTIONS_TABLE");
 
   // Timestamp first so the sort key orders chronologically; a random suffix
   // keeps two detections in the same millisecond from colliding.

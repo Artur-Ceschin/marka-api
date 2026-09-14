@@ -1,12 +1,14 @@
 import { randomUUID } from "node:crypto";
 import {
+  CopyObjectCommand,
   GetObjectCommand,
-  HeadObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
 import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
 import { AppError } from "@/kernel/errors/AppError";
-import { env } from "@/shared/env";
+import { isAwsError } from "@/kernel/errors/isAwsError";
+import { lazy } from "@/kernel/lazy";
+import { env, requireEnv } from "@/shared/env";
 
 export const UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 export const UPLOAD_EXPIRES_SECONDS = 300;
@@ -23,35 +25,31 @@ export interface PresignedUpload {
   expiresIn: number;
 }
 
-let client: S3Client | undefined;
+// uploads/ is expired by a lifecycle rule; detections/ is kept.
+const UPLOADS = "uploads/";
+const DETECTIONS = "detections/";
 
-function s3(): S3Client {
-  client ??= new S3Client({ region: env.AWS_REGION });
-  return client;
-}
+const s3 = lazy(() => new S3Client({ region: env.AWS_REGION }));
+
+const notFound = () =>
+  new AppError(404, "UPLOAD_NOT_FOUND", "Upload not found");
 
 export class PlantBucket {
-  private readonly bucket: string;
-
-  constructor() {
-    if (!env.PLANTS_BUCKET) {
-      throw new Error(
-        "PLANTS_BUCKET is required. In deployed environments serverless " +
-          "injects it; locally, copy it from `pnpm sls:print` into .env",
-      );
-    }
-
-    this.bucket = env.PLANTS_BUCKET;
-  }
+  private readonly bucket = requireEnv("PLANTS_BUCKET");
 
   static keyFor(userId: string): string {
-    return `uploads/${userId}/${randomUUID()}`;
+    return `${UPLOADS}${userId}/${randomUUID()}`;
   }
 
   static assertOwnedBy(key: string, userId: string): void {
-    if (!key.startsWith(`uploads/${userId}/`)) {
-      throw new AppError(404, "UPLOAD_NOT_FOUND", "Upload not found");
+    if (!key.startsWith(`${UPLOADS}${userId}/`)) {
+      throw notFound();
     }
+  }
+
+  // Same owner and id under a prefix the lifecycle rule does not touch.
+  static durableKeyFor(uploadKey: string): string {
+    return DETECTIONS + uploadKey.slice(UPLOADS.length);
   }
 
   async createUpload(
@@ -80,41 +78,40 @@ export class PlantBucket {
     };
   }
 
-  /** Confirms the client actually completed the upload before we bill work on it. */
-  async assertUploaded(key: string): Promise<void> {
+  async getObject(key: string): Promise<Buffer> {
     try {
-      await s3().send(new HeadObjectCommand({ Bucket: this.bucket, Key: key }));
-    } catch {
-      throw new AppError(
-        404,
-        "UPLOAD_NOT_FOUND",
-        "No upload found for that key. Upload the image first",
+      const { Body } = await s3().send(
+        new GetObjectCommand({ Bucket: this.bucket, Key: key }),
       );
+
+      if (Body) {
+        return Buffer.from(await Body.transformToByteArray());
+      }
+    } catch (error) {
+      // S3 only reports NoSuchKey when the role has s3:ListBucket; without it
+      // a missing key is a 403, which would surface here as a 500.
+      if (!isAwsError(error, "NoSuchKey")) {
+        throw error;
+      }
     }
+
+    throw notFound();
   }
 
-  async getObject(key: string): Promise<Buffer> {
-    const response = await s3().send(
-      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+  // Copy rather than move: the lifecycle rule already removes the original,
+  // and a delete would need another IAM permission for no benefit.
+  async persist(uploadKey: string): Promise<string> {
+    const key = PlantBucket.durableKeyFor(uploadKey);
+
+    await s3().send(
+      new CopyObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        // CopySource must be URL-encoded; encodeURI keeps the slashes.
+        CopySource: encodeURI(`${this.bucket}/${uploadKey}`),
+      }),
     );
 
-    if (!response.Body) {
-      throw new AppError(404, "UPLOAD_NOT_FOUND", "Upload not found");
-    }
-
-    return Buffer.from(await response.Body.transformToByteArray());
-  }
-
-  async getObjectFromUrl(url: string): Promise<Buffer> {
-    const prefix = `s3://${this.bucket}/`;
-    if (!url.startsWith(prefix)) {
-      throw new AppError(404, "UPLOAD_NOT_FOUND", "Upload not found");
-    }
-
-    return this.getObject(url.slice(prefix.length));
-  }
-
-  objectUrl(key: string): string {
-    return `s3://${this.bucket}/${key}`;
+    return key;
   }
 }

@@ -1,7 +1,8 @@
 import { UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { dynamoClient } from "@/infra/clients/dynamo";
 import { AppError } from "@/kernel/errors/AppError";
-import { env } from "@/shared/env";
+import { isAwsError } from "@/kernel/errors/isAwsError";
+import { env, requireEnv } from "@/shared/env";
 
 const SECONDS_PER_DAY = 86_400;
 
@@ -12,18 +13,7 @@ export interface QuotaResult {
 }
 
 export class UsageRepository {
-  private readonly table: string;
-
-  constructor() {
-    if (!env.USAGE_TABLE) {
-      throw new Error(
-        "USAGE_TABLE is required. In deployed environments serverless " +
-          "injects it; locally, copy it from `pnpm sls:print` into .env",
-      );
-    }
-
-    this.table = env.USAGE_TABLE;
-  }
+  private readonly table = requireEnv("USAGE_TABLE");
 
   // UTC, so the reset time is the same for everyone rather than depending on
   // where the caller happens to be.
@@ -79,10 +69,7 @@ export class UsageRepository {
     } catch (error) {
       // The condition failing is the quota being spent — the only expected
       // failure here, and not a server error.
-      if (
-        error instanceof Error &&
-        error.name === "ConditionalCheckFailedException"
-      ) {
+      if (isAwsError(error, "ConditionalCheckFailedException")) {
         throw new AppError(
           429,
           "DAILY_LIMIT_REACHED",

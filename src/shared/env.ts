@@ -27,3 +27,22 @@ if (_env.success === false) {
 }
 
 export const env = _env.data;
+
+type StringVar = {
+  [K in keyof typeof env]-?: (typeof env)[K] extends string | undefined
+    ? K
+    : never;
+}[keyof typeof env];
+
+export function requireEnv(name: StringVar): string {
+  const value = env[name];
+
+  if (!value) {
+    throw new Error(
+      `${name} is not set. Deployed functions receive it from serverless; ` +
+        "locally, add it to .env — the value is in the stack outputs.",
+    );
+  }
+
+  return value;
+}

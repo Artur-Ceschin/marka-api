@@ -1,15 +1,17 @@
 import {
   AdminGetUserCommand,
   AdminInitiateAuthCommand,
-  CognitoIdentityProviderClient,
+  type CognitoIdentityProviderClient,
   ConfirmForgotPasswordCommand,
   ConfirmSignUpCommand,
   ForgotPasswordCommand,
   ResendConfirmationCodeCommand,
   SignUpCommand,
 } from "@aws-sdk/client-cognito-identity-provider";
+import { cognitoClient } from "@/infra/clients/cognito";
 import { AppError } from "@/kernel/errors/AppError";
-import { env } from "@/shared/env";
+import { isAwsError } from "@/kernel/errors/isAwsError";
+import { requireEnv } from "@/shared/env";
 import type {
   AuthTokens,
   ConfirmSignUpRequest,
@@ -81,24 +83,13 @@ const ERROR_MAP: Record<
 };
 
 export class CognitoGateway {
-  private readonly client: CognitoIdentityProviderClient;
-  private readonly userPoolId: string;
-  private readonly clientId: string;
+  private readonly userPoolId = requireEnv("USER_POOL_ID");
+  private readonly clientId = requireEnv("USER_POOL_CLIENT_ID");
 
-  constructor(client?: CognitoIdentityProviderClient) {
-    if (!env.USER_POOL_ID || !env.USER_POOL_CLIENT_ID) {
-      throw new Error(
-        "USER_POOL_ID and USER_POOL_CLIENT_ID are required for auth routes. " +
-          "In deployed environments serverless injects them; locally, copy " +
-          "them from `pnpm sls:print` into .env",
-      );
-    }
-
-    this.client =
-      client ?? new CognitoIdentityProviderClient({ region: env.AWS_REGION });
-    this.userPoolId = env.USER_POOL_ID;
-    this.clientId = env.USER_POOL_CLIENT_ID;
-  }
+  // Injectable so tests can drive the error-mapping branches without AWS.
+  constructor(
+    private readonly client: CognitoIdentityProviderClient = cognitoClient(),
+  ) {}
 
   async signUp({ email, password }: SignUpRequest): Promise<string> {
     const response = await this.mapErrors(() =>
@@ -162,7 +153,7 @@ export class CognitoGateway {
     } catch (error) {
       // Resolve for unknown emails on purpose: differing responses here would
       // let anyone test which addresses have accounts.
-      if (error instanceof Error && error.name === "UserNotFoundException") {
+      if (isAwsError(error, "UserNotFoundException")) {
         return;
       }
 
@@ -228,7 +219,7 @@ export class CognitoGateway {
     } catch (error) {
       // Same reasoning as forgotPassword: resolve for unknown emails so the
       // endpoint cannot be used to test which addresses have accounts.
-      if (error instanceof Error && error.name === "UserNotFoundException") {
+      if (isAwsError(error, "UserNotFoundException")) {
         return;
       }
 
@@ -265,7 +256,7 @@ export class CognitoGateway {
       // NotAuthorizedException here means the refresh token is expired or
       // revoked — not a bad password. The shared map's wording would send the
       // client to the wrong recovery path.
-      if (error instanceof Error && error.name === "NotAuthorizedException") {
+      if (isAwsError(error, "NotAuthorizedException")) {
         throw new AppError(
           401,
           "SESSION_EXPIRED",

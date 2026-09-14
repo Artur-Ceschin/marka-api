@@ -1,21 +1,10 @@
 import { PutCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { dynamoClient } from "@/infra/clients/dynamo";
-import { env } from "@/shared/env";
+import { requireEnv } from "@/shared/env";
 import type { UserProfile } from "@/shared/types/auth";
 
 export class UsersRepository {
-  private readonly table: string;
-
-  constructor() {
-    if (!env.USERS_TABLE) {
-      throw new Error(
-        "USERS_TABLE is required for auth routes. In deployed environments " +
-          "serverless injects it; locally, copy it from `pnpm sls:print` into .env",
-      );
-    }
-
-    this.table = env.USERS_TABLE;
-  }
+  private readonly table = requireEnv("USERS_TABLE");
 
   async create(profile: UserProfile): Promise<void> {
     await dynamoClient().send(

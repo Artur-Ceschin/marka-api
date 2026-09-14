@@ -7,7 +7,7 @@ import type {
   IdentifyPlantResponse,
 } from "@/shared/types/plant";
 
-type Bucket = Pick<PlantBucket, "assertUploaded" | "getObject" | "objectUrl">;
+type Bucket = Pick<PlantBucket, "getObject" | "persist">;
 type Identifier = Pick<PlantIdentification, "identify">;
 type Detections = Pick<DetectionsRepository, "save">;
 type Usage = Pick<UsageRepository, "claimIdentification">;
@@ -24,30 +24,31 @@ export class IdentifyPlantUseCase {
   async execute(
     request: IdentifyPlantRequest & { userId: string },
   ): Promise<IdentifyPlantResponse> {
-    // The key encodes its owner, so this rejects another user's key before
-    // any S3 or PlantNet call is made.
+    // The key encodes its owner, so another user's key is rejected before any
+    // S3 or PlantNet call is made.
     PlantBucket.assertOwnedBy(request.key, request.userId);
 
-    // Confirms the upload actually completed. Without it a client could send
-    // a key it never uploaded to and we would pay for the identification.
-    await this.plantBucket.assertUploaded(request.key);
-
-    const imageUrl = this.plantBucket.objectUrl(request.key);
+    // Doubles as the upload check: a key that was never uploaded to fails
+    // here with a 404, before a quota credit or a PlantNet call is spent.
     const image = await this.plantBucket.getObject(request.key);
 
     const quota = await this.usage.claimIdentification(request.userId);
+    const candidates = await this.plantIdentification.identify(image);
 
-    const plants = await this.plantIdentification.identify(image);
+    // Copied out of uploads/ only once there is a detection to keep it for, so
+    // a failed identification leaves nothing durable behind.
+    const imageKey = await this.plantBucket.persist(request.key);
 
-    const createdAt = new Date().toISOString();
     const detectionId = this.newDetectionId();
+    const createdAt = new Date().toISOString();
+    const status = "pending_confirmation";
 
     await this.detections.save({
       userId: request.userId,
       detectionId,
-      imageUrl,
-      candidates: plants,
-      status: "pending_confirmation",
+      imageKey,
+      candidates,
+      status,
       location: request.location,
       createdAt,
     });
@@ -55,8 +56,8 @@ export class IdentifyPlantUseCase {
     return {
       success: true,
       detectionId,
-      candidates: plants,
-      status: "pending_confirmation",
+      candidates,
+      status,
       timestamp: createdAt,
       quota,
     };

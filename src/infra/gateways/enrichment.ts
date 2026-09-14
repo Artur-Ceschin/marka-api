@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { AppError } from "@/kernel/errors/AppError";
+import { lazy } from "@/kernel/lazy";
 import { env } from "@/shared/env";
 import type { PlantEnrichment } from "@/shared/types/plant";
 
@@ -39,12 +40,7 @@ const SYSTEM_PROMPT =
   "explicit about pets, and never guess: if you are not sure, say the user " +
   "should check with a vet or poison control.";
 
-let client: OpenAI | undefined;
-
-function openai(): OpenAI {
-  client ??= new OpenAI();
-  return client;
-}
+const openai = lazy(() => new OpenAI());
 
 const FIXTURE: PlantEnrichment = {
   description: "Fixture enrichment — no OPENAI_API_KEY configured.",

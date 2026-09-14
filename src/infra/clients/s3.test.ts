@@ -47,3 +47,19 @@ describe("PlantBucket.assertOwnedBy", () => {
     assert.equal(keys.size, 100);
   });
 });
+
+describe("PlantBucket.durableKeyFor", () => {
+  it("moves the key out of uploads/ and keeps the owner in it", () => {
+    assert.equal(
+      PlantBucket.durableKeyFor(`uploads/${USER}/abc`),
+      `detections/${USER}/abc`,
+    );
+  });
+
+  it("rewrites only the leading prefix", () => {
+    assert.equal(
+      PlantBucket.durableKeyFor(`uploads/${USER}/uploads/abc`),
+      `detections/${USER}/uploads/abc`,
+    );
+  });
+});

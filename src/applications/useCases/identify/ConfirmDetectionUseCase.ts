@@ -35,11 +35,11 @@ export class ConfirmDetectionUseCase {
     // The species must be one PlantNet actually proposed. Without this the
     // endpoint becomes a free "write me care instructions for anything"
     // call, and the stored result would no longer reflect an identification.
-    const match = detection.candidates.find(
+    const isCandidate = detection.candidates.some(
       (candidate) => candidate.species === species,
     );
 
-    if (!match) {
+    if (!isCandidate) {
       throw new AppError(
         400,
         "SPECIES_NOT_A_CANDIDATE",
@@ -47,9 +47,7 @@ export class ConfirmDetectionUseCase {
       );
     }
 
-    const image = await this.plantBucket.getObject(
-      this.keyFromUrl(detection.imageUrl),
-    );
+    const image = await this.plantBucket.getObject(detection.imageKey);
 
     const enrichment = await this.enrichment.enrich({
       species,
@@ -71,21 +69,5 @@ export class ConfirmDetectionUseCase {
       enrichment,
       status: confirmed.status,
     };
-  }
-
-  // imageUrl is stored as s3://<bucket>/<key>; the bucket is already known.
-  private keyFromUrl(imageUrl: string): string {
-    const withoutScheme = imageUrl.replace(/^s3:\/\//, "");
-    const key = withoutScheme.slice(withoutScheme.indexOf("/") + 1);
-
-    if (!key) {
-      throw new AppError(
-        500,
-        "DETECTION_CORRUPT",
-        "Detection is missing its image",
-      );
-    }
-
-    return key;
   }
 }

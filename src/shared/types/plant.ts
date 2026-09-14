@@ -21,13 +21,11 @@ export type DetectionStatus = "pending_confirmation" | "confirmed" | "rejected";
 export interface Detection {
   userId: string;
   detectionId: string;
-  imageUrl: string;
+  imageKey: string;
   candidates: PlantCandidate[];
   status: DetectionStatus;
   location?: { latitude: number; longitude: number } | undefined;
   createdAt: string;
-  // Written only once the user picks a species — enrichment is generated
-  // against a confirmed identification, never a guess.
   confirmedSpecies?: string | undefined;
   enrichment?: PlantEnrichment | undefined;
   confirmedAt?: string | undefined;

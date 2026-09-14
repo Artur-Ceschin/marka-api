@@ -4,6 +4,7 @@ import {
 } from "@aws-sdk/client-cognito-identity-provider";
 import { cognitoClient } from "@/infra/clients/cognito";
 import { UsersRepository } from "@/infra/repositories/usersRepository";
+import { isAwsError } from "@/kernel/errors/isAwsError";
 
 interface CognitoTriggerEvent {
   triggerSource: string;
@@ -55,9 +56,7 @@ export const postConfirmation = async (event: CognitoTriggerEvent) => {
   } catch (error) {
     // create() is conditional on the row not existing, so a duplicate means
     // the profile is already there — not a reason to fail someone's sign-in.
-    const name = error instanceof Error ? error.name : "";
-
-    if (name !== "ConditionalCheckFailedException") {
+    if (!isAwsError(error, "ConditionalCheckFailedException")) {
       console.error("[postConfirmation] could not write profile", error);
     }
   }
