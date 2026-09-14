@@ -1,6 +1,7 @@
 import { PlantBucket } from "@/infra/clients/s3";
 import type { PlantIdentification } from "@/infra/gateways/plantNet";
 import type { DetectionsRepository } from "@/infra/repositories/detectionsRepository";
+import type { UsageRepository } from "@/infra/repositories/usageRepository";
 import type {
   IdentifyPlantRequest,
   IdentifyPlantResponse,
@@ -9,12 +10,14 @@ import type {
 type Bucket = Pick<PlantBucket, "assertUploaded" | "getObject" | "objectUrl">;
 type Identifier = Pick<PlantIdentification, "identify">;
 type Detections = Pick<DetectionsRepository, "save">;
+type Usage = Pick<UsageRepository, "claimIdentification">;
 
 export class IdentifyPlantUseCase {
   constructor(
     private plantBucket: Bucket,
     private plantIdentification: Identifier,
     private detections: Detections,
+    private usage: Usage,
     private newDetectionId: () => string,
   ) {}
 
@@ -32,10 +35,9 @@ export class IdentifyPlantUseCase {
     const imageUrl = this.plantBucket.objectUrl(request.key);
     const image = await this.plantBucket.getObject(request.key);
 
-    const plants = await this.plantIdentification.identify(
-      image,
-      request.location,
-    );
+    const quota = await this.usage.claimIdentification(request.userId);
+
+    const plants = await this.plantIdentification.identify(image);
 
     const createdAt = new Date().toISOString();
     const detectionId = this.newDetectionId();
@@ -56,6 +58,7 @@ export class IdentifyPlantUseCase {
       candidates: plants,
       status: "pending_confirmation",
       timestamp: createdAt,
+      quota,
     };
   }
 }

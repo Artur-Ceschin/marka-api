@@ -7,6 +7,7 @@ import { PlantBucket } from "@/infra/clients/s3";
 import { plantEnrichment } from "@/infra/gateways/enrichment";
 import { plantIdentification } from "@/infra/gateways/plantNet";
 import { DetectionsRepository } from "@/infra/repositories/detectionsRepository";
+import { UsageRepository } from "@/infra/repositories/usageRepository";
 
 // Built on first request for the same reason as makeAuthController: server.ts
 // loads every route in one process, so eager construction would break /health
@@ -17,10 +18,15 @@ export function makeIdentifyController(): IdentifyController {
   if (!controller) {
     const detections = new DetectionsRepository();
     const bucket = new PlantBucket();
+    const usage = new UsageRepository();
 
     controller = new IdentifyController(
-      new IdentifyPlantUseCase(bucket, plantIdentification, detections, () =>
-        DetectionsRepository.newId(),
+      new IdentifyPlantUseCase(
+        bucket,
+        plantIdentification,
+        detections,
+        usage,
+        () => DetectionsRepository.newId(),
       ),
       new ListDetectionsUseCase(detections),
       new CreateUploadUseCase(bucket),

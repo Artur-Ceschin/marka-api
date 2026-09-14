@@ -39,3 +39,31 @@ Resources:
       KeySchema:
         - AttributeName: userId
           KeyType: HASH
+
+  # Daily identification quota, one row per user per day.
+  #
+  # Keyed on the date so the counter never needs resetting: a new day is
+  # simply a new row, and TTL removes yesterday's. The alternative — a single
+  # row per user with a stored date — needs read-modify-write logic to detect
+  # the rollover, which is both more code and racy.
+  UsageTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    Properties:
+      TableName: ${self:custom.usageTable}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: day
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: day
+          KeyType: RANGE
+      # Rows are disposable counters, so they expire rather than accumulate.
+      # No Retain or deletion protection here for the same reason.
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true

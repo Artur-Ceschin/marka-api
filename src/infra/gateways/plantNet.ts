@@ -45,26 +45,24 @@ export class PlantIdentification {
    * exercisable locally — it logs loudly, because silently serving fake
    * species data is the kind of thing that reaches production.
    */
-  async identify(
-    image: Buffer,
-    location?: { latitude: number; longitude: number },
-  ): Promise<PlantCandidate[]> {
+  async identify(image: Buffer): Promise<PlantCandidate[]> {
     if (!env.PLANTNET_API_KEY) {
       console.warn("[PlantNet] No API key set — returning fixture data");
       return FIXTURE;
     }
 
     const form = new FormData();
-    form.append("images", new Blob([new Uint8Array(image)]), "plant.jpg");
+    form.append(
+      "images",
+      new Blob([new Uint8Array(image)], { type: "image/jpeg" }),
+      "plant.jpg",
+    );
     form.append("organs", "auto");
 
+    // PLANTNET_PROJECT is the regional lever — "weurope", "canada", etc.
+    // instead of "all".
     const url = new URL(`${BASE_URL}/${env.PLANTNET_PROJECT}`);
     url.searchParams.set("api-key", env.PLANTNET_API_KEY);
-    // PlantNet uses coordinates to weight regionally plausible species.
-    if (location) {
-      url.searchParams.set("lat", String(location.latitude));
-      url.searchParams.set("lon", String(location.longitude));
-    }
 
     const response = await fetch(url, { method: "POST", body: form });
 

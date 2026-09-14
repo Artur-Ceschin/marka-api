@@ -9,20 +9,17 @@ environment:
   PLANTS_BUCKET: !Ref PlantsBucket
   DETECTIONS_TABLE: !Ref DetectionsTable
   USERS_TABLE: !Ref UsersTable
+  USAGE_TABLE: !Ref UsageTable
+  # 10/day. PlantNet's free tier is 500/day shared across everyone, so this
+  # supports ~50 daily-active users before the pool runs dry.
+  DAILY_IDENTIFY_LIMIT: 10
   USER_POOL_ID: !Ref UserPool
   USER_POOL_CLIENT_ID: !Ref UserPoolClient
-  # Secrets come from SSM so they are never committed. Serverless resolves
-  # these at deploy time and bakes the value into the function's environment,
-  # so they are readable by anyone with Lambda console access — fine for a
-  # single-maintainer project, but not the same as runtime Secrets Manager.
-  # The `, ''` default keeps a deploy working before the params exist.
   PLANTNET_API_KEY: ${ssm:/marka/${sls:stage}/plantnet-api-key, ''}
   OPENAI_API_KEY: ${ssm:/marka/${sls:stage}/openai-api-key, ''}
 
 httpApi:
   cors: true
-  # Cognito ID tokens carry `aud`; access tokens carry `client_id` and are
-  # rejected here. Clients must send the idToken.
   authorizers:
     cognitoJwt:
       type: jwt
@@ -60,6 +57,10 @@ iam:
           - dynamodb:GetItem
           - dynamodb:UpdateItem
         Resource: !GetAtt UsersTable.Arn
+      - Effect: Allow
+        Action:
+          - dynamodb:UpdateItem
+        Resource: !GetAtt UsageTable.Arn
       - Effect: Allow
         Action:
           - cognito-idp:SignUp

@@ -32,6 +32,9 @@ function makeDeps() {
         saved.push(d);
       },
     },
+    usage: {
+      claimIdentification: async () => ({ used: 1, limit: 5, remaining: 4 }),
+    },
   };
 }
 
@@ -43,6 +46,7 @@ describe("IdentifyPlantUseCase", () => {
       deps.bucket,
       deps.identifier,
       deps.detections,
+      deps.usage,
       () => "2026-09-10T12:00:00.000Z#abcd1234",
     ).execute({ userId: USER, key: `uploads/${USER}/abc` });
 
@@ -59,6 +63,7 @@ describe("IdentifyPlantUseCase", () => {
       deps.bucket,
       deps.identifier,
       deps.detections,
+      deps.usage,
       () => id,
     ).execute({ userId: USER, key: `uploads/${USER}/abc` });
 

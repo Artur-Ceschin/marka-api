@@ -18,3 +18,5 @@ fromName: Marka
 
 emailEventsTopic: ${self:service}-email-events-${sls:stage}
 emailConfigSet: ${self:service}-${sls:stage}
+
+usageTable: ${self:service}-usage-${sls:stage}

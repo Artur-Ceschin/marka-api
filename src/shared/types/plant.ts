@@ -43,12 +43,21 @@ export interface IdentifyPlantRequest {
   location?: { latitude: number; longitude: number } | undefined;
 }
 
+export interface DailyQuota {
+  used: number;
+  limit: number;
+  remaining: number;
+}
+
 export interface IdentifyPlantResponse {
   success: boolean;
   detectionId: string;
   candidates: PlantCandidate[];
   status: DetectionStatus;
   timestamp: string;
+  // Returned so the client can show "3 identifications left today" without a
+  // second request.
+  quota: DailyQuota;
 }
 
 export interface ConfirmDetectionResponse {
