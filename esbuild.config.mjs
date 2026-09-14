@@ -1,9 +1,7 @@
 import { rm } from "node:fs/promises";
 import * as esbuild from "esbuild";
 
-// One bundle per Lambda. The entry name becomes dist/<name>.mjs, which is
-// what sls/functions/*.yml reference as `dist/<name>.handler`.
-const functions = ["health", "auth", "identify"];
+const functions = ["health", "auth", "identify", "cognitoTriggers"];
 
 await rm("dist", { recursive: true, force: true });
 

@@ -68,6 +68,10 @@ Resources:
           </body>
           </html>
 
+      LambdaConfig:
+        PostConfirmation: !GetAtt PostConfirmationLambdaFunction.Arn
+        PreSignUp: !GetAtt PreSignUpLambdaFunction.Arn
+
       EmailConfiguration:
         EmailSendingAccount: DEVELOPER
         From: "${self:custom.fromName} <${self:custom.fromEmail}>"
@@ -84,6 +88,10 @@ Resources:
 
   UserPoolClient:
     Type: AWS::Cognito::UserPoolClient
+    # Naming Google in SupportedIdentityProviders before the provider exists
+    # fails the deploy, and CloudFormation cannot infer the ordering from a
+    # plain string.
+    DependsOn: GoogleIdentityProvider
     Properties:
       ClientName: ${self:custom.userPoolClient}
       UserPoolId: !Ref UserPool
@@ -98,8 +106,79 @@ Resources:
 
       PreventUserExistenceErrors: ENABLED
 
+      # OAuth for the Google redirect flow. The password flow above is
+      # untouched — federated users cannot use the Cognito API at all, so the
+      # two paths coexist rather than replacing one another.
+      #
+      # SupportedIdentityProviders gains "Google" once the identity provider
+      # exists; naming it before then fails the deploy.
+      SupportedIdentityProviders:
+        - COGNITO
+        - Google
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthScopes:
+        - openid
+        - email
+        - profile
+      # Cognito rejects any redirect_uri not listed here, matched exactly —
+      # scheme, port and trailing slash included.
+      CallbackURLs: ${self:custom.callbackUrls}
+      LogoutURLs: ${self:custom.logoutUrls}
+
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: ${self:custom.cognitoDomain}
+      UserPoolId: !Ref UserPool
+
+  # Cognito invokes the triggers directly, so each function needs a
+  # resource-based policy naming this pool as the caller.
+  PostConfirmationInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt PostConfirmationLambdaFunction.Arn
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt UserPool.Arn
+
+  PreSignUpInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt PreSignUpLambdaFunction.Arn
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt UserPool.Arn
+
+  # Google as a federated provider. Credentials come from SSM so they are
+  # never committed; the client secret is a real secret, the client id only
+  # travels in redirect URLs but lives alongside it for simplicity.
+  GoogleIdentityProvider:
+    Type: AWS::Cognito::UserPoolIdentityProvider
+    Properties:
+      UserPoolId: !Ref UserPool
+      ProviderName: Google
+      ProviderType: Google
+      ProviderDetails:
+        client_id: ${ssm:/marka/${sls:stage}/google-client-id, ''}
+        client_secret: ${ssm:/marka/${sls:stage}/google-client-secret, ''}
+        # openid alone omits the address; email is what the PostConfirmation
+        # trigger writes to the profile and what account linking matches on.
+        authorize_scopes: openid email profile
+      # Maps Google's claims onto Cognito user attributes. Without the email
+      # mapping the trigger has no address to key a profile or a link on.
+      AttributeMapping:
+        email: email
+        email_verified: email_verified
+        name: name
+        username: sub
+
 Outputs:
   UserPoolId:
     Value: !Ref UserPool
   UserPoolClientId:
     Value: !Ref UserPoolClient
+
+  # Hosts /oauth2/authorize and /oauth2/token. Nothing renders Cognito's own
+  # page in this flow, but the endpoints do not exist without a domain.

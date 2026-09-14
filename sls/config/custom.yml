@@ -20,3 +20,11 @@ emailEventsTopic: ${self:service}-email-events-${sls:stage}
 emailConfigSet: ${self:service}-${sls:stage}
 
 usageTable: ${self:service}-usage-${sls:stage}
+
+cognitoDomain: marka-auth-${sls:stage}
+callbackUrls:
+  - http://localhost:3000/auth/callback
+  - https://markaplant.app/auth/callback
+logoutUrls:
+  - http://localhost:3000
+  - https://markaplant.app

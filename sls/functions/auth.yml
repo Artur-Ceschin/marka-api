@@ -1,12 +1,14 @@
 handler: dist/auth.handler
 memorySize: 256
 timeout: 10
+environment:
+  USER_POOL_ID: !Ref UserPool
+  USER_POOL_CLIENT_ID: !Ref UserPoolClient
+
 package:
   patterns:
     - "!**"
     - "dist/auth.mjs"
-# A route with no httpApi event here is unreachable, however correctly it is
-# registered in Fastify.
 events:
   - httpApi: "POST /auth/signup"
   - httpApi: "POST /auth/confirm"

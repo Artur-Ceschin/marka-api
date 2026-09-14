@@ -16,7 +16,7 @@ import { describe, it } from "node:test";
 import { pathToFileURL } from "node:url";
 
 const DIST = join(process.cwd(), "dist");
-const FUNCTIONS = ["health", "auth", "identify"];
+const FUNCTIONS = ["health", "auth", "identify", "cognitoTriggers"];
 
 const context = {
   awsRequestId: "bundle-test",
@@ -51,12 +51,38 @@ describe("built Lambda bundles", () => {
 
   // Importing is the assertion: a bad banner or a missing chunk throws here,
   // which is exactly the cold-start failure we are trying not to deploy.
-  for (const fn of FUNCTIONS) {
+  for (const fn of FUNCTIONS.filter((f) => f !== "cognitoTriggers")) {
     it(`${fn}: imports cleanly and exports a handler`, async () => {
       const { handler } = await load(fn);
       assert.equal(typeof handler, "function");
     });
   }
+
+  // Cognito invokes these directly and exports two handlers rather than one.
+  // A failed import here is a failed sign-in, not a failed HTTP request.
+  it("cognitoTriggers: exports both trigger handlers", async () => {
+    const mod = await load("cognitoTriggers");
+
+    assert.equal(typeof mod.postConfirmation, "function");
+    assert.equal(typeof mod.preSignUp, "function");
+  });
+
+  it("cognitoTriggers: ignores trigger sources it does not own", async () => {
+    const { postConfirmation, preSignUp } = await load("cognitoTriggers");
+    const event = {
+      triggerSource: "PostConfirmation_ConfirmForgotPassword",
+      request: { userAttributes: {} },
+      response: {},
+    };
+
+    // A password reset must pass straight through — touching the profile
+    // here would overwrite it, and throwing would break the reset.
+    assert.deepEqual(await postConfirmation(event), event);
+    assert.deepEqual(
+      await preSignUp({ ...event, triggerSource: "PreSignUp_SignUp" }),
+      { ...event, triggerSource: "PreSignUp_SignUp" },
+    );
+  });
 
   it("health responds through the aws-lambda adapter", async () => {
     const { handler } = await load("health");

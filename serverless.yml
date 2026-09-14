@@ -11,6 +11,15 @@ functions:
   health: ${file(./sls/functions/health.yml)}
   auth: ${file(./sls/functions/auth.yml)}
   identify: ${file(./sls/functions/identify.yml)}
+  postConfirmation: ${file(./sls/functions/cognitoTriggers.yml)}
+  preSignUp:
+    handler: dist/cognitoTriggers.preSignUp
+    memorySize: 256
+    timeout: 5
+    package:
+      patterns:
+        - "!**"
+        - "dist/cognitoTriggers.mjs"
 
 resources:
   - ${file(./sls/resources/s3.yml)}

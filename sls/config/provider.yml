@@ -13,8 +13,7 @@ environment:
   # 10/day. PlantNet's free tier is 500/day shared across everyone, so this
   # supports ~50 daily-active users before the pool runs dry.
   DAILY_IDENTIFY_LIMIT: 10
-  USER_POOL_ID: !Ref UserPool
-  USER_POOL_CLIENT_ID: !Ref UserPoolClient
+
   PLANTNET_API_KEY: ${ssm:/marka/${sls:stage}/plantnet-api-key, ''}
   OPENAI_API_KEY: ${ssm:/marka/${sls:stage}/openai-api-key, ''}
 
@@ -70,4 +69,16 @@ iam:
           - cognito-idp:AdminGetUser
           - cognito-idp:ForgotPassword
           - cognito-idp:ConfirmForgotPassword
-        Resource: !GetAtt UserPool.Arn
+          # PreSignUp trigger: links a Google sign-in to an existing account.
+          - cognito-idp:AdminLinkProviderForUser
+          # PreSignUp trigger: finds the native account by email before linking.
+          - cognito-idp:ListUsers
+
+        Resource:
+          Fn::Join:
+            - ""
+            - - "arn:aws:cognito-idp:"
+              - !Ref AWS::Region
+              - ":"
+              - !Ref AWS::AccountId
+              - ":userpool/*"

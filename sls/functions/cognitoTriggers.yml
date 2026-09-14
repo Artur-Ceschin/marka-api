@@ -1,0 +1,7 @@
+handler: dist/cognitoTriggers.postConfirmation
+memorySize: 256
+timeout: 5
+package:
+  patterns:
+    - "!**"
+    - "dist/cognitoTriggers.mjs"
