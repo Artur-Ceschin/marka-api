@@ -18,7 +18,12 @@ environment:
   OPENAI_API_KEY: ${ssm:/marka/${sls:stage}/openai-api-key, ''}
 
 httpApi:
-  cors: true
+  # Object form, not `cors: true`: Retry-After must be listed in the exposed
+  # headers or browsers hide it from fetch() on a cross-origin response.
+  cors:
+    allowedOrigins: ["*"]
+    allowedHeaders: [Content-Type, Authorization, Accept-Language]
+    exposedResponseHeaders: [Retry-After]
   authorizers:
     cognitoJwt:
       type: jwt

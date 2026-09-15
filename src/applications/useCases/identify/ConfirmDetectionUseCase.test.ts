@@ -29,6 +29,7 @@ function detection(overrides: Partial<Detection> = {}): Detection {
         confidence: 0.9,
       },
     ],
+    certainty: "high",
     status: "pending_confirmation",
     createdAt: "2026-09-10T12:00:00.000Z",
     ...overrides,
@@ -115,6 +116,30 @@ describe("ConfirmDetectionUseCase", () => {
     // that never happened.
     assert.deepEqual(deps.enrichCalls, []);
     assert.deepEqual(deps.confirmCalls, []);
+  });
+
+  it("rejects an already confirmed detection without paying for enrichment", async () => {
+    const deps = makeDeps(detection({ status: "confirmed" }));
+
+    await assert.rejects(
+      () =>
+        new ConfirmDetectionUseCase(
+          deps.detections,
+          deps.bucket,
+          deps.enrichment,
+        ).execute({
+          userId: USER,
+          detectionId: DETECTION_ID,
+          species: "Rosa gallica",
+        }),
+      (error: unknown) => {
+        assert.ok(error instanceof AppError);
+        assert.equal(error.statusCode, 409);
+        return true;
+      },
+    );
+
+    assert.deepEqual(deps.enrichCalls, []);
   });
 
   it("does not enrich a detection belonging to someone else", async () => {

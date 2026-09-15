@@ -16,7 +16,8 @@ Resources:
       # web client cannot work without this.
       CorsConfiguration:
         CorsRules:
-          - AllowedMethods: [POST]
+          # GET so the app can fetch() a signed image URL, not just <img> it.
+          - AllowedMethods: [GET, POST]
             AllowedOrigins: ["*"]
             AllowedHeaders: ["*"]
             ExposedHeaders: [ETag]

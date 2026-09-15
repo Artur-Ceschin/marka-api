@@ -3,14 +3,35 @@ import type { PlantIdentification } from "@/infra/gateways/plantNet";
 import type { DetectionsRepository } from "@/infra/repositories/detectionsRepository";
 import type { UsageRepository } from "@/infra/repositories/usageRepository";
 import type {
+  Certainty,
   IdentifyPlantRequest,
   IdentifyPlantResponse,
+  PlantCandidate,
 } from "@/shared/types/plant";
 
 type Bucket = Pick<PlantBucket, "getObject" | "persist">;
 type Identifier = Pick<PlantIdentification, "identify">;
 type Detections = Pick<DetectionsRepository, "save">;
 type Usage = Pick<UsageRepository, "claimIdentification">;
+
+// "high" needs a strong top score AND clear daylight over the runner-up:
+// 0.9 against 0.85 is a coin flip, however strong 0.9 looks on its own.
+const CONFIDENT_SCORE = 0.5;
+const CONFIDENT_MARGIN = 0.2;
+
+export function certaintyOf(candidates: PlantCandidate[]): Certainty {
+  const [top, runnerUp] = candidates;
+
+  if (!top) {
+    return "low";
+  }
+
+  const margin = top.confidence - (runnerUp?.confidence ?? 0);
+
+  return top.confidence >= CONFIDENT_SCORE && margin >= CONFIDENT_MARGIN
+    ? "high"
+    : "low";
+}
 
 export class IdentifyPlantUseCase {
   constructor(
@@ -42,12 +63,14 @@ export class IdentifyPlantUseCase {
     const detectionId = this.newDetectionId();
     const createdAt = new Date().toISOString();
     const status = "pending_confirmation";
+    const certainty = certaintyOf(candidates);
 
     await this.detections.save({
       userId: request.userId,
       detectionId,
       imageKey,
       candidates,
+      certainty,
       status,
       location: request.location,
       createdAt,
@@ -57,6 +80,7 @@ export class IdentifyPlantUseCase {
       success: true,
       detectionId,
       candidates,
+      certainty,
       status,
       timestamp: createdAt,
       quota,

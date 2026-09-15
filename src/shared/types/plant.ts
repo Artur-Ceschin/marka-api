@@ -18,11 +18,15 @@ export interface PlantEnrichment {
 
 export type DetectionStatus = "pending_confirmation" | "confirmed" | "rejected";
 
+// Decided by the server so every client draws the same line; see certaintyOf.
+export type Certainty = "high" | "low";
+
 export interface Detection {
   userId: string;
   detectionId: string;
   imageKey: string;
   candidates: PlantCandidate[];
+  certainty: Certainty;
   status: DetectionStatus;
   location?: { latitude: number; longitude: number } | undefined;
   createdAt: string;
@@ -31,10 +35,14 @@ export interface Detection {
   confirmedAt?: string | undefined;
 }
 
-export interface DetectionPage {
-  items: Detection[];
+export interface DetectionPage<T = Detection> {
+  items: T[];
   nextCursor?: string | undefined;
 }
+
+// What the API returns for a stored detection: the private key plus a
+// short-lived URL the client can actually load.
+export type DetectionView = Detection & { imageUrl: string };
 
 export interface IdentifyPlantRequest {
   key: string;
@@ -51,6 +59,7 @@ export interface IdentifyPlantResponse {
   success: boolean;
   detectionId: string;
   candidates: PlantCandidate[];
+  certainty: Certainty;
   status: DetectionStatus;
   timestamp: string;
   // Returned so the client can show "3 identifications left today" without a

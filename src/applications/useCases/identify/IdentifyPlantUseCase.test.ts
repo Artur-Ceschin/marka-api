@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { IdentifyPlantUseCase } from "@/applications/useCases/identify/IdentifyPlantUseCase";
+import {
+  certaintyOf,
+  IdentifyPlantUseCase,
+} from "@/applications/useCases/identify/IdentifyPlantUseCase";
 import { PlantBucket } from "@/infra/clients/s3";
 import { DetectionsRepository } from "@/infra/repositories/detectionsRepository";
 import type { Detection, PlantCandidate } from "@/shared/types/plant";
@@ -112,6 +115,33 @@ describe("IdentifyPlantUseCase", () => {
 
     assert.deepEqual(deps.persisted, []);
     assert.deepEqual(deps.saved, []);
+  });
+});
+
+describe("certaintyOf", () => {
+  const candidate = (confidence: number): PlantCandidate => ({
+    species: "Rosa gallica",
+    scientificName: "Rosa gallica L.",
+    commonNames: [],
+    family: "Rosaceae",
+    genus: "Rosa",
+    confidence,
+  });
+
+  it("is high for a strong score well ahead of the runner-up", () => {
+    assert.equal(certaintyOf([candidate(0.8), candidate(0.3)]), "high");
+  });
+
+  it("is low for a weak top score", () => {
+    assert.equal(certaintyOf([candidate(0.2), candidate(0.07)]), "low");
+  });
+
+  it("is low when the top two are close, however strong the top one is", () => {
+    assert.equal(certaintyOf([candidate(0.9), candidate(0.85)]), "low");
+  });
+
+  it("is low with no candidates at all", () => {
+    assert.equal(certaintyOf([]), "low");
   });
 });
 

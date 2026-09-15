@@ -21,6 +21,12 @@ export class UsageRepository {
     return at.toISOString().slice(0, 10);
   }
 
+  static secondsUntilReset(at = new Date()): number {
+    return (
+      SECONDS_PER_DAY - (Math.floor(at.getTime() / 1000) % SECONDS_PER_DAY)
+    );
+  }
+
   /**
    * Claims one identification against today's quota, atomically.
    *
@@ -74,6 +80,7 @@ export class UsageRepository {
           429,
           "DAILY_LIMIT_REACHED",
           `You have used all ${limit} identifications for today. The limit resets at midnight UTC`,
+          UsageRepository.secondsUntilReset(),
         );
       }
 

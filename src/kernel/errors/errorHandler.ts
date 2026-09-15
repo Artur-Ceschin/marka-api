@@ -59,6 +59,10 @@ export class ErrorHandler {
   };
 
   private handleAppError = (error: AppError, reply: FastifyReply): void => {
+    if (error.retryAfterSeconds !== undefined) {
+      reply.header("Retry-After", String(error.retryAfterSeconds));
+    }
+
     const response = this.buildErrorResponse({
       error: error.message,
       code: error.code,

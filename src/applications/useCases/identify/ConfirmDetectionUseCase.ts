@@ -8,6 +8,13 @@ type Bucket = Pick<PlantBucket, "getObject">;
 type Enricher = Pick<PlantEnrichmentGateway, "enrich">;
 type Detections = Pick<DetectionsRepository, "findById" | "confirm">;
 
+const alreadyConfirmed = () =>
+  new AppError(
+    409,
+    "DETECTION_ALREADY_CONFIRMED",
+    "This detection has already been confirmed",
+  );
+
 export class ConfirmDetectionUseCase {
   constructor(
     private detections: Detections,
@@ -30,6 +37,12 @@ export class ConfirmDetectionUseCase {
 
     if (!detection) {
       throw new AppError(404, "DETECTION_NOT_FOUND", "Detection not found");
+    }
+
+    // Checked before enrichment, so a repeated confirm does not pay for a
+    // second LLM call only to be rejected when the row is written.
+    if (detection.status !== "pending_confirmation") {
+      throw alreadyConfirmed();
     }
 
     // The species must be one PlantNet actually proposed. Without this the
@@ -61,6 +74,11 @@ export class ConfirmDetectionUseCase {
       species,
       enrichment,
     });
+
+    // Another request confirmed it between the read above and this write.
+    if (!confirmed) {
+      throw alreadyConfirmed();
+    }
 
     return {
       success: true,

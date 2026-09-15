@@ -33,3 +33,17 @@ describe("UsageRepository.today", () => {
     assert.ok(earlier < later);
   });
 });
+
+describe("UsageRepository.secondsUntilReset", () => {
+  it("counts down to the next midnight UTC", () => {
+    const oneMinuteBefore = new Date("2026-09-14T23:59:00Z");
+
+    assert.equal(UsageRepository.secondsUntilReset(oneMinuteBefore), 60);
+  });
+
+  it("returns a full day exactly at midnight", () => {
+    const midnight = new Date("2026-09-14T00:00:00Z");
+
+    assert.equal(UsageRepository.secondsUntilReset(midnight), 86_400);
+  });
+});

@@ -6,6 +6,7 @@ import type { PresignedUpload, UploadContentType } from "@/infra/clients/s3";
 import type {
   ConfirmDetectionResponse,
   DetectionPage,
+  DetectionView,
   IdentifyPlantRequest,
   IdentifyPlantResponse,
 } from "@/shared/types/plant";
@@ -27,7 +28,7 @@ export class IdentifyController {
   async listDetections(
     userId: string,
     options: { limit?: number; cursor?: string | undefined },
-  ): Promise<DetectionPage> {
+  ): Promise<DetectionPage<DetectionView>> {
     return this.listDetectionsUseCase.execute(userId, options);
   }
 

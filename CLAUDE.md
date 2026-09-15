@@ -25,20 +25,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 sls/                  Serverless config, split by concern
   config/             provider.yml + custom.yml (shared variable definitions)
   functions/          one file per deployed function
-  resources/          CloudFormation for S3 and DynamoDB
-scripts/              local tooling (synthetic Lambda invocation)
+  resources/          CloudFormation: S3, DynamoDB, Cognito, SES, custom domain
+scripts/              bundle.test.mjs — exercises the built dist/*.mjs artifacts
 src/
   applications/       controllers, use cases, Zod schemas
     useCases/<domain>/  one folder per domain, tests colocated
-  infra/              external integrations (PlantNet, S3) — currently mocked
-  kernel/             cross-cutting concerns (error handling)
+  infra/              external integrations: Cognito, S3, DynamoDB, PlantNet, OpenAI
+  kernel/             cross-cutting helpers: AppError, isAwsError, lazy
   main/               composition root
     app.ts            buildApp(plugins) — assembles a Fastify app from a slice
     server.ts         local dev only: every route in one process
     routes/           Fastify plugins, grouped by domain
+    plugins/          request hooks — `authenticated` exposes request.user
     factories/        picks concrete implementations and wires them together
-    functions/        Lambda entry points — one per deployed function
-  shared/             env validation, logger, domain types
+    functions/        Lambda entry points — HTTP handlers plus cognitoTriggers.ts
+  shared/             env validation (+ requireEnv), logger, domain types
 ```
 
 Dependencies point inward: `main` knows everything, `applications` knows
@@ -50,6 +51,7 @@ Dependencies point inward: `main` knows everything, `applications` knows
 - **Environment Validation**: Zod schema in `shared/env.ts` validates all env vars at startup—fail fast
 - **Type Safety**: Strict TypeScript settings (noUncheckedIndexedAccess, exactOptionalPropertyTypes) enforced to catch bugs early
 - **No Over-Engineering**: Add abstractions only when you have 3+ similar cases; premature abstractions slow learning
+- **No `utils/` folder**: shared helpers live beside the concern they serve — `requireEnv` next to the env schema, `isAwsError` and `lazy` in `kernel/` — so nothing becomes a grab bag
 
 ## Development Commands
 
@@ -69,11 +71,11 @@ pnpm verify           # lint + typecheck + test + test:bundle (what CI runs)
 # Deploy
 pnpm sls:deploy       # Build, then `serverless deploy`
 pnpm sls:logs identify # Tail one function's CloudWatch logs
-pnpm sls:print        # Show the fully resolved serverless config
+pnpm sls:print        # Resolved config — PRINTS SSM SECRETS IN PLAINTEXT; always pipe through grep
 pnpm sls:remove       # Delete the stack (fails until deletion protection is off)
 
 # Environment
-# Copy .env.example to .env and populate (PORT, NODE_ENV)
+# Copy .env.example to .env (pnpm dev loads it). Blank API keys fall back to fixtures.
 ```
 
 ## Important Patterns
@@ -132,20 +134,27 @@ When integrating PlantNet API and AI models:
 
 ### Architecture Overview
 
-Marka API is **three Lambda functions behind one API Gateway HTTP API**. There
-are no servers, no load balancer, and no VPC — the whole stack costs ~$0/month
-at low traffic and stays inside the Lambda free tier.
+Marka API is **three HTTP functions behind one API Gateway HTTP API**, plus
+**two Cognito trigger functions** that Cognito invokes directly. There are no
+servers, no load balancer, and no VPC — the whole stack costs ~$0/month at low
+traffic and stays inside the Lambda free tier.
 
 ```
 Internet -> API Gateway (HTTP API)
-              |-- health    GET  /health, /status      128MB /  5s
-              |-- auth      POST /auth/signup, /signin 256MB / 10s
-              |-- identify  POST /identify            1024MB / 29s
+              |-- health    GET  /health, /status              128MB /  5s
+              |-- auth      POST /auth/*                       256MB / 10s
+              |-- identify  POST /uploads, /identify,         1024MB / 29s
+                                 /detections/{id}/confirm
+                            GET  /identifications
                               |-- S3 (plant images)
-                              |-- DynamoDB (detections)
+                              |-- DynamoDB (detections, daily usage)
+                              |-- PlantNet (identify), OpenAI (enrich)
+
+Cognito -> postConfirmation   256MB / 5s   writes the UsersTable profile
+        -> preSignUp          256MB / 5s   links Google to an existing account
 ```
 
-### Why Split Into Three Functions?
+### Why Split Into Three HTTP Functions?
 
 Domain-based splitting, not one-Lambda-per-route. Each function gets memory and
 a timeout matched to its actual work: `health` is trivial and cheap, `identify`
@@ -177,21 +186,213 @@ deploy surface for no benefit. Three domains is the defensible middle.
   `Dynamic require of "crypto" is not supported` at runtime.
 - **`.mjs` output** tells the Lambda Node runtime to load the file as an ES
   module without shipping a `package.json`.
-- **`binaryMimeTypes`** must be set on the `identify` handler, or API Gateway's
-  base64 body reaches Fastify as a string and `toBuffer()` yields garbage.
+- **No `binaryMimeTypes` anywhere now.** It was required while `identify`
+  accepted multipart uploads — without it API Gateway's base64 body reached
+  Fastify as a string and `toBuffer()` yielded garbage. Images now go straight
+  to S3, so the functions only ever see JSON. Reintroduce it if a route ever
+  accepts a binary body again.
 
 ### Known Limits
 
 - API Gateway HTTP API has a **hard 29-second request timeout**.
 - Lambda's synchronous payload limit is **6MB** (API Gateway allows 10MB).
-  Phone photos can exceed this — the fix is **presigned S3 upload URLs**, where
-  the client uploads directly to S3 and only sends the key to `/identify`.
-  Not built yet.
+  Phone photos exceed this, which is why uploads go straight to S3 via a
+  presigned POST — see "Uploads" below.
+
+### Uploads: presigned POST
+
+Images never pass through Lambda. The client asks for a presigned upload,
+sends the file straight to S3, then sends only the key:
+
+```
+POST /uploads    { contentType }  -> { url, fields, key, maxBytes, expiresIn }
+  client POSTs the file to `url` with `fields` + the file, direct to S3
+POST /identify   { key, location } -> the detection
+```
+
+This is what removes the **6MB Lambda payload limit** — phone photos routinely
+exceed it, and base64 encoding over API Gateway inflates them by a further
+third. It also keeps the upload out of the 29-second API Gateway timeout and
+stops the function paying memory to buffer an image.
+
+**Presigned POST, not PUT.** Only POST carries policy conditions, and
+`content-length-range` is the only thing that actually caps upload size — a
+presigned PUT will accept a 5GB file from an authenticated caller and there is
+no server-side way to refuse it. The tradeoff is a slightly heavier client: it
+must send `multipart/form-data` containing every field from `fields` *before*
+the file part, in that order.
+
+**The key proves its own ownership.** Keys are `uploads/<userId>/<uuid>`, so
+`assertOwnedBy` rejects another user's key before any S3 or PlantNet call.
+This matters because `/identify` accepts a key from the client — without the
+check, user A could pass user B's key and pull their image into a detection.
+The mismatch answers 404 rather than 403: confirming a key exists but belongs
+to someone else is itself a leak. The uuid keeps keys unguessable, so knowing
+a user id is not enough to reach their uploads.
+
+`getObject` doubles as the upload check: a key that was never uploaded to fails
+with a 404 before a quota credit or a PlantNet call is spent on it.
+
+**The bucket needs CORS** or browser uploads fail at the pre-flight; native
+mobile clients ignore CORS entirely, so this is easy to miss until the web
+client exists. Lifecycle rules expire `uploads/` after 7 days — a presigned URL
+can be issued and used but never identified, leaving objects that are
+unreachable and still billed — and abort incomplete multipart uploads after 1
+day, which are invisible in the console but charged.
+
+### The identification flow
+
+Identification is split across two requests because the **user** is the one
+who resolves ambiguity — they are standing in front of the plant:
+
+```
+POST /uploads                          -> presigned POST
+  client uploads the image to S3
+POST /identify { key, location }       -> PlantNet only     ~1-3s
+  -> { detectionId, candidates: [{species, confidence}...],
+       status: "pending_confirmation" }
+  user picks a candidate in the UI
+POST /detections/{id}/confirm { species } -> LLM only       ~5-15s
+  -> { species, enrichment: {description, care, toxicity, nativeStatus} }
+```
+
+**Enrichment runs only after confirmation.** Enriching every candidate would
+multiply cost and discard most of it, but the real reason is that enrichment
+includes toxicity advice — generating "safe around cats" for a species nobody
+confirmed produces confident, wrong answers about something that matters.
+
+Both timings are estimates: neither call has been measured end to end against
+the real services yet, and that measurement is what decides whether the
+synchronous design holds.
+
+The split also keeps both calls well inside API Gateway's 29-second ceiling,
+which is what makes a synchronous design viable at all. If either half grows
+past it, the fix is an explicit job (`202` + a poll endpoint), **not** an S3
+event trigger: an S3 event has no HTTP request to answer, so the client would
+need polling anyway, and it would bypass the ownership and upload checks that
+`/identify` performs.
+
+**PlantNet identifies; the LLM explains.** These are not interchangeable. A
+general vision model returns a confident, plausible, wrong binomial — species
+ID is where a specialised model trained on labelled plant images beats a
+generalist. The LLM's value is everything PlantNet does not return:
+description, care, toxicity, and native or invasive status.
+
+**PlantNet does not take coordinates.** `lat` and `lon` query parameters are
+rejected outright (`"lat" is not allowed`), and because the gateway maps any
+PlantNet 400 to `INVALID_IMAGE`, the failure first looked like a bad photo.
+Regional narrowing is done by project instead — `PLANTNET_PROJECT=weurope` or
+`canada` rather than `all`. The request's `location` is stored on the detection
+and read by exactly one consumer: enrichment's native/invasive answer, so only
+`/identify` needs to receive it. Clients should prefer the photo's EXIF GPS over
+live device location — a gallery or holiday photo was not taken where the user
+is standing now — and round to about two decimal places, since native status
+is regional and full precision pinpoints a user's garden.
+
+Enrichment runs on **`gpt-5-nano`** (`infra/gateways/enrichment.ts`), chosen on
+cost: roughly $0.0004 per enrichment against $0.026 on a frontier model, on a
+task that is factual recall and formatting rather than reasoning. Two things
+that choice depends on:
+
+- **`reasoning: { effort: "minimal" }` is not optional.** Nano is a reasoning
+  model and reasoning tokens bill as output tokens, so leaving effort at its
+  default would spend the saving the model was picked for.
+- **Toxicity is the field to watch.** It is the one output where a confident
+  hallucination causes real harm, and smaller models are worse at knowing when
+  they do not know. The system prompt tells it to defer to a vet when unsure;
+  before trusting it at volume, run an eval of known-toxicity species against
+  a larger model and compare.
+
+The gateway is one file with one method, so swapping providers is a contained
+change — that is why the model choice was not worth agonising over up front.
+
+**`/confirm` rejects a species that was not among the candidates.** Without
+that check the endpoint is a free "write care instructions for anything" call,
+and the stored detection would claim an identification that never happened.
+
+Both gateways fall back to fixtures when their API key is absent, logging a
+warning, so the whole flow is exercisable locally. `PLANTNET_API_KEY` and
+`OPENAI_API_KEY` come from SSM at deploy time (`/marka/<stage>/...`), so
+they are never committed — note they are resolved into the function's
+environment, which is not the same as reading Secrets Manager at runtime.
+
+### Daily identification quota
+
+Each user gets `DAILY_IDENTIFY_LIMIT` identifications per UTC day, enforced in
+`infra/repositories/usageRepository.ts`. It is set to **10** in
+`sls/config/provider.yml`; the Zod default of 5 only applies locally when the
+variable is unset. PlantNet's free tier is 500 identifications a day **shared
+across every user**, so 10 per user covers about 50 daily-active users before
+the shared pool runs dry. Past that, raise the variable and upgrade the PlantNet
+plan — nothing else changes. `/identify` returns
+`quota: { used, limit, remaining }` so the client can show what is left, and the
+first call over the limit returns `429 DAILY_LIMIT_REACHED`.
+
+**The check is one conditional `UpdateItem`, not a read followed by a write.**
+Two concurrent requests would both read 4, both conclude there was room, and
+both proceed. DynamoDB evaluates `ConditionExpression` and the increment
+together, so the second fails with `ConditionalCheckFailedException` — which
+the repository maps to a 429 rather than letting it surface as a 500.
+
+`UsageTable` is keyed `userId` + `day`, so a new day is simply a new row and
+the counter never needs resetting; TTL removes yesterday's. Storing one row
+per user with a date attribute instead would need read-modify-write logic to
+detect the rollover. These rows are disposable counters, which is why this is
+the one table with no `Retain` and no deletion protection.
+
+**The credit is claimed before PlantNet is called**, so a failed
+identification still costs the user one. That is the right way round — the
+quota protects a shared allowance, and claiming after success lets a burst of
+retries blow straight through it.
+
+Days are bucketed in **UTC**, so everyone's quota resets at the same instant
+rather than at a time that depends on where they are.
+
+### Per-User Detections
+
+`DetectionsTable` is keyed `userId` (HASH) + `detectionId` (RANGE), not a bare
+`id`. The key is the physical layout in DynamoDB, not an indexed column: the
+partition key decides which partition an item lives on. Keyed on a random `id`,
+every detection scatters and "this user's detections" can only be answered by a
+`Scan` — reading the whole table and discarding non-matches, at a cost that
+grows with the table rather than the result. Keyed on `userId`, one user's rows
+share a partition and a `Query` reads only them.
+
+That also makes isolation structural: a `Query` is scoped to one partition key,
+so it cannot return another user's rows even if a caller supplies a bad cursor.
+
+`detectionId` is `<ISO-8601 timestamp>#<random suffix>`. Sort keys order
+lexicographically and ISO-8601 sorts chronologically as text, so newest-first
+is `ScanIndexForward: false` with no sorting in code; the suffix prevents
+collisions inside one millisecond.
+
+**Changing this key schema later is a migration**, not a config edit — it
+requires replacing the table, which collides with `DeletionProtectionEnabled`,
+`UpdateReplacePolicy: Retain`, and the explicit `TableName`. It was free here
+only because the table held zero items.
+
+### Reading the caller's identity
+
+All four identify-domain routes — `/uploads`, `/identify`,
+`/detections/{id}/confirm`, `/identifications` — sit behind the API Gateway JWT
+authorizer,
+which validates the token at the edge and passes the claims through at
+`request.awsLambda.event.requestContext.authorizer.jwt.claims`. **A Lambda
+authorizer is not needed** — it would add a function, a cold start and a bill
+to re-verify what API Gateway already verified. Lambda authorizers earn their
+place only for logic API Gateway cannot express: database lookups, API keys,
+non-JWT tokens.
+
+`main/plugins/authenticated.ts` normalises this into `request.user`. In Lambda
+it trusts the edge-verified claims; locally, where there is no API Gateway, it
+verifies the bearer token with `aws-jwt-verify`. Handlers therefore never
+branch on environment, and `pnpm dev` behaves like production.
 
 ### Data Protection
 
-Both DynamoDB tables carry three separate protections, because they fail in
-different ways:
+The detections and users tables carry three separate protections, because they
+fail in different ways (the usage table deliberately has none — its rows are
+disposable counters):
 
 - `DeletionProtectionEnabled: true` blocks the `DeleteTable` API — console,
   CLI, or `sls:remove`.
@@ -213,15 +414,35 @@ they must also be deleted by hand afterwards.
 The stage is named `dev`, but it is the only stack and `api.markaplant.app`
 points at it. Treat it as production.
 
-**The S3 bucket has none of this** — no `DeletionPolicy`, no versioning. Plant
-photos are currently deletable and unrecoverable.
+**The S3 bucket has `Retain` but no versioning.** It survives a stack deletion,
+but a deleted or overwritten object is gone.
+
+**Detection images live under `detections/`, not `uploads/`.** The
+`expire-unidentified-uploads` lifecycle rule deletes `uploads/` after 7 days —
+right for an upload nobody identified, wrong for an image a detection points
+at. So once PlantNet succeeds, `/identify` copies the object to
+`detections/<userId>/<id>` (`PlantBucket.persist`) and stores that as
+`imageKey`. It copies rather than moves, because the lifecycle rule already
+removes the original and a delete would need another permission; and it copies
+only after identification succeeds, so a failed call leaves nothing durable.
 
 ### IAM
 
-One role shared by all three functions, scoped to the specific bucket and table
-ARNs. Per-function least privilege needs the `serverless-iam-roles-per-function`
-plugin; it is not worth adding until a function handles data the others should
-not touch.
+One role shared by all five functions, scoped to the specific bucket and table
+ARNs — with one exception. The Cognito statement grants
+`arn:aws:cognito-idp:<region>:<account>:userpool/*` instead of
+`!GetAtt UserPool.Arn`, because the GetAtt is circular: the pool's
+`LambdaConfig` references the trigger functions, and those functions use this
+role. The account and region hold exactly one pool, so it grants nothing extra
+in practice. Per-function roles (the `serverless-iam-roles-per-function` plugin)
+would let the main role keep the tight ARN; not worth adding until a second pool
+exists or a function handles data the others should not touch.
+
+The role also holds `s3:ListBucket` on the bucket. Without it S3 answers
+`GetObject` on a missing key with `403 Access Denied` rather than
+`404 NoSuchKey`, so a never-uploaded key would surface as a 500 instead of a
+clean `UPLOAD_NOT_FOUND`. The role can already read every object, so listing
+keys grants nothing meaningful.
 
 ### Auth: Cognito + DynamoDB
 
@@ -405,11 +626,13 @@ database should not look the same to a client. `NotAuthorizedException` and
 `UserNotFoundException` deliberately map to the *same* 401, so the API
 never reveals whether an email is registered.
 
-**Sign-up writes to two systems with no transaction.** Cognito first (it
-owns the email-uniqueness check), then the profile row keyed on the `sub`
-it returns. If the DynamoDB write fails, the Cognito user survives and a
-retry gets a 409. The AWS-native fix is a Cognito PostConfirmation Lambda
-trigger that writes the profile — worth adding if this actually bites.
+**The profile row is written by the `postConfirmation` trigger.** Cognito fires
+it for native confirmation and for a federated user's first sign-in, and Google
+users never call `/auth/signup`, so a profile written only by `SignUpUseCase`
+would never exist for them. `SignUpUseCase` still writes the row too — the write
+is conditional on `attribute_not_exists(userId)`, so the two are idempotent —
+and that write can come out once the trigger has been verified with a real
+sign-up.
 
 **Confirmation needs one extra call.** `ConfirmSignUp` confirms by email and
 returns nothing about the user, so `AdminGetUser` fetches the `sub` before
@@ -419,6 +642,80 @@ There is no local Cognito emulator: `pnpm dev` talks to the real deployed
 pool. The auth dependencies are therefore built lazily on first request, not
 at route registration, so missing Cognito env vars don't take `/health` and
 `/identify` down with them locally.
+
+### Google sign-in
+
+Google is a **second, parallel auth flow**, not an extra button on the first.
+Cognito's docs are explicit: *"You can't sign in federated users with the Amazon
+Cognito user pools API."* `/auth/signin` can never serve a Google user. The
+client redirects the browser to Cognito's authorize endpoint with
+`identity_provider=Google`, receives a `code` on its callback route, and
+exchanges it at `/oauth2/token` with PKCE. The app client has no secret, so PKCE
+— not secrecy of the client id, which necessarily ships in the browser — is what
+protects that exchange.
+
+What that requires in `sls/resources/cognito.yml`:
+
+- **A Cognito domain** (`marka-auth-<stage>`). It hosts `/oauth2/authorize` and
+  `/oauth2/token` even though no Cognito page is ever rendered — the app has its
+  own login UI.
+- **OAuth on the app client**: the `code` grant, `openid email profile`, and a
+  `CallbackURLs` allow-list in `sls/config/custom.yml`. Cognito matches
+  `redirect_uri` exactly — scheme, port and trailing slash.
+- **`GoogleIdentityProvider`**, with the Google client id and secret from SSM
+  (`/marka/<stage>/google-client-id` and `/google-client-secret`).
+- **`AttributeMapping` for `email` and `email_verified`.** Without it a Google
+  user arrives with no address, and both triggers have nothing to key on.
+- **`DependsOn: GoogleIdentityProvider` on the app client.** The client names
+  `Google` in `SupportedIdentityProviders`, and CloudFormation cannot infer an
+  ordering from a plain string.
+
+**There are two redirect lists, and only one contains localhost.** Google's
+authorized redirect URI is always Cognito's `https://<domain>/oauth2/idpresponse`
+— Google redirects to Cognito, never to the app. The app's own URLs, localhost
+included, belong in Cognito's `CallbackURLs`. The domain is stage-scoped, so a
+`prod` stage needs a second entry in Google's list.
+
+Both flows end with an **`idToken`**, so everything downstream — the JWT
+authorizer, `/auth/refresh`, the quota — is identical and cannot tell them apart.
+
+#### Cognito triggers
+
+`src/main/functions/cognitoTriggers.ts` holds two handlers in one bundle. Both
+must answer within **5 seconds**, and Cognito treats an error or a timeout as a
+failed sign-in, so each does the minimum and never throws for anything
+recoverable.
+
+- **`postConfirmation`** writes the `UsersTable` profile. It fires for native
+  confirmation *and* a federated user's first sign-in, which is why the write
+  lives here. It ignores `PostConfirmation_ConfirmForgotPassword`.
+- **`preSignUp`** links a Google sign-in to an existing password account with
+  the same email, so one person is one `sub` rather than two users with two sets
+  of detections. `DestinationUser` must be the pool **username**, which with
+  email sign-in is a UUID rather than the address, so the account is found with
+  `ListUsers` first. It links only when `email_verified` is `"true"`: linking
+  lets the external identity sign in *as* the account, so an unverified email
+  there is an account takeover. A failed link is logged and sign-in proceeds.
+  **Linking has not been verified end to end yet** — sign in with Google as an
+  address that already has a password account and confirm Cognito shows one
+  user.
+
+**Wiring the triggers hit two CloudFormation circular dependencies**, and
+neither was caught by typecheck, tests or `sls:print`:
+
+- **`provider.environment` applies to every function**, triggers included.
+  `USER_POOL_ID: !Ref UserPool` there made the trigger functions depend on the
+  pool that depends on them through `LambdaConfig`. The pool variables are now
+  set per function on `auth` and `identify`; the triggers read `userPoolId` from
+  the event.
+- **The shared IAM role referenced `!GetAtt UserPool.Arn`** — see IAM above.
+
+`sls:print` resolves variables but never validates the template's dependency
+graph. `serverless package` writes the real template to
+`.serverless/cloudformation-template-update-stack.json` without deploying, and
+that file can be checked for cycles locally. From the same round: resources
+appended to the end of a CloudFormation file that finishes with an `Outputs:`
+block silently become outputs rather than resources.
 
 ### Tooling
 
@@ -458,7 +755,10 @@ Gateway v2 events. This tests the *artifact*, not the source — a missing
 `createRequire` banner or an unpackaged shared chunk typechecks perfectly and
 still dies at cold start. Both build constraints above were found this way.
 It runs with `NODE_ENV=production` so it also guards behaviour that differs
-by environment, like validation `details` being present in responses.
+by environment, like validation `details` being present in responses. It also
+imports `cognitoTriggers.mjs`, asserts both handlers are exported, and checks
+each passes through trigger sources it does not own — a failed import there is
+a failed sign-in, not a failed request.
 
 ### Deployment Workflow
 

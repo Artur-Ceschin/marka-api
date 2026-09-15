@@ -5,6 +5,7 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { AppError } from "@/kernel/errors/AppError";
 import { isAwsError } from "@/kernel/errors/isAwsError";
 import { lazy } from "@/kernel/lazy";
@@ -12,10 +13,13 @@ import { env, requireEnv } from "@/shared/env";
 
 export const UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 export const UPLOAD_EXPIRES_SECONDS = 300;
+const IMAGE_URL_EXPIRES_SECONDS = 3600;
 
-const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+// JPEG and PNG only: PlantNet accepts nothing else, so a webp or HEIC upload
+// would be stored and then fail at identification. Clients convert first.
+export const UPLOAD_CONTENT_TYPES = ["image/jpeg", "image/png"] as const;
 
-export type UploadContentType = (typeof ALLOWED_TYPES)[number];
+export type UploadContentType = (typeof UPLOAD_CONTENT_TYPES)[number];
 
 export interface PresignedUpload {
   url: string;
@@ -96,6 +100,16 @@ export class PlantBucket {
     }
 
     throw notFound();
+  }
+
+  // Signed per request and short-lived, so a copied link stops working. It can
+  // expire sooner: a presigned URL dies with the credentials that signed it.
+  imageUrl(key: string): Promise<string> {
+    return getSignedUrl(
+      s3(),
+      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+      { expiresIn: IMAGE_URL_EXPIRES_SECONDS },
+    );
   }
 
   // Copy rather than move: the lifecycle rule already removes the original,

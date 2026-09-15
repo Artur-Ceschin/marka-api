@@ -6,6 +6,7 @@ import {
   UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
 import { dynamoClient } from "@/infra/clients/dynamo";
+import { isAwsError } from "@/kernel/errors/isAwsError";
 import { requireEnv } from "@/shared/env";
 import type {
   Detection,
@@ -83,37 +84,46 @@ export class DetectionsRepository {
     detectionId: string;
     species: string;
     enrichment: PlantEnrichment;
-  }): Promise<Detection> {
-    const response = await dynamoClient().send(
-      new UpdateCommand({
-        TableName: this.table,
-        Key: { userId, detectionId },
-        UpdateExpression:
-          "SET #status = :status, #species = :species, " +
-          "#enrichment = :enrichment, #confirmedAt = :now",
-        // Aliased throughout: `status` is a DynamoDB reserved word, and
-        // aliasing the rest keeps the habit consistent.
-        ExpressionAttributeNames: {
-          "#status": "status",
-          "#species": "confirmedSpecies",
-          "#enrichment": "enrichment",
-          "#confirmedAt": "confirmedAt",
-        },
-        // Never create a row here: an Update on a missing key would otherwise
-        // insert one, inventing a detection that was never identified.
-        ConditionExpression:
-          "attribute_exists(detectionId) AND #status = :pending",
-        ExpressionAttributeValues: {
-          ":status": "confirmed",
-          ":pending": "pending_confirmation",
-          ":species": species,
-          ":enrichment": enrichment,
-          ":now": new Date().toISOString(),
-        },
-        ReturnValues: "ALL_NEW",
-      }),
-    );
+  }): Promise<Detection | undefined> {
+    const response = await dynamoClient()
+      .send(
+        new UpdateCommand({
+          TableName: this.table,
+          Key: { userId, detectionId },
+          UpdateExpression:
+            "SET #status = :status, #species = :species, " +
+            "#enrichment = :enrichment, #confirmedAt = :now",
+          // Aliased throughout: `status` is a DynamoDB reserved word, and
+          // aliasing the rest keeps the habit consistent.
+          ExpressionAttributeNames: {
+            "#status": "status",
+            "#species": "confirmedSpecies",
+            "#enrichment": "enrichment",
+            "#confirmedAt": "confirmedAt",
+          },
+          // Never create a row here: an Update on a missing key would otherwise
+          // insert one, inventing a detection that was never identified.
+          ConditionExpression:
+            "attribute_exists(detectionId) AND #status = :pending",
+          ExpressionAttributeValues: {
+            ":status": "confirmed",
+            ":pending": "pending_confirmation",
+            ":species": species,
+            ":enrichment": enrichment,
+            ":now": new Date().toISOString(),
+          },
+          ReturnValues: "ALL_NEW",
+        }),
+      )
+      .catch((error: unknown) => {
+        // No longer pending: another request confirmed it first. Returned as
+        // "nothing confirmed" so the use case decides what that means.
+        if (isAwsError(error, "ConditionalCheckFailedException")) {
+          return undefined;
+        }
+        throw error;
+      });
 
-    return response.Attributes as Detection;
+    return response?.Attributes as Detection | undefined;
   }
 }

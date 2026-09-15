@@ -8,31 +8,24 @@ import { plantEnrichment } from "@/infra/gateways/enrichment";
 import { plantIdentification } from "@/infra/gateways/plantNet";
 import { DetectionsRepository } from "@/infra/repositories/detectionsRepository";
 import { UsageRepository } from "@/infra/repositories/usageRepository";
+import { lazy } from "@/kernel/lazy";
 
-// Built on first request for the same reason as makeAuthController: server.ts
-// loads every route in one process, so eager construction would break /health
-// when the bucket or table env vars are unset.
-let controller: IdentifyController | null = null;
+// Built on first request, not at import: server.ts loads every route in one
+// process, so eager construction would break /health when env vars are unset.
+export const makeIdentifyController = lazy(() => {
+  const detections = new DetectionsRepository();
+  const bucket = new PlantBucket();
 
-export function makeIdentifyController(): IdentifyController {
-  if (!controller) {
-    const detections = new DetectionsRepository();
-    const bucket = new PlantBucket();
-    const usage = new UsageRepository();
-
-    controller = new IdentifyController(
-      new IdentifyPlantUseCase(
-        bucket,
-        plantIdentification,
-        detections,
-        usage,
-        () => DetectionsRepository.newId(),
-      ),
-      new ListDetectionsUseCase(detections),
-      new CreateUploadUseCase(bucket),
-      new ConfirmDetectionUseCase(detections, bucket, plantEnrichment),
-    );
-  }
-
-  return controller;
-}
+  return new IdentifyController(
+    new IdentifyPlantUseCase(
+      bucket,
+      plantIdentification,
+      detections,
+      new UsageRepository(),
+      () => DetectionsRepository.newId(),
+    ),
+    new ListDetectionsUseCase(detections, bucket),
+    new CreateUploadUseCase(bucket),
+    new ConfirmDetectionUseCase(detections, bucket, plantEnrichment),
+  );
+});

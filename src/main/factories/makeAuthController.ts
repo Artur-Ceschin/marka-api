@@ -8,26 +8,21 @@ import { SignInUseCase } from "@/applications/useCases/auth/SignInUseCase";
 import { SignUpUseCase } from "@/applications/useCases/auth/SignUpUseCase";
 import { CognitoGateway } from "@/infra/gateways/cognito";
 import { UsersRepository } from "@/infra/repositories/usersRepository";
+import { lazy } from "@/kernel/lazy";
 
 // Built on first request, not at import: server.ts loads every route in one
-// process, so eager construction would break /health when Cognito env is unset.
-let controller: AuthController | null = null;
+// process, so eager construction would break /health when env vars are unset.
+export const makeAuthController = lazy(() => {
+  const cognito = new CognitoGateway();
+  const users = new UsersRepository();
 
-export function makeAuthController(): AuthController {
-  if (!controller) {
-    const cognito = new CognitoGateway();
-    const users = new UsersRepository();
-
-    controller = new AuthController(
-      new SignUpUseCase(cognito, users),
-      new ConfirmSignUpUseCase(cognito, users),
-      new SignInUseCase(cognito),
-      new ForgotPasswordUseCase(cognito),
-      new ResetPasswordUseCase(cognito),
-      new RefreshTokenUseCase(cognito),
-      new ResendCodeUseCase(cognito),
-    );
-  }
-
-  return controller;
-}
+  return new AuthController(
+    new SignUpUseCase(cognito, users),
+    new ConfirmSignUpUseCase(cognito, users),
+    new SignInUseCase(cognito),
+    new ForgotPasswordUseCase(cognito),
+    new ResetPasswordUseCase(cognito),
+    new RefreshTokenUseCase(cognito),
+    new ResendCodeUseCase(cognito),
+  );
+});
