@@ -4,7 +4,6 @@ import {
 } from "@aws-sdk/client-cognito-identity-provider";
 import { cognitoClient } from "@/infra/clients/cognito";
 import { UsersRepository } from "@/infra/repositories/usersRepository";
-import { isAwsError } from "@/kernel/errors/isAwsError";
 
 interface CognitoTriggerEvent {
   triggerSource: string;
@@ -45,9 +44,10 @@ export const postConfirmation = async (event: CognitoTriggerEvent) => {
   }
 
   try {
-    await new UsersRepository().create({
+    await new UsersRepository().createIfMissing({
       userId,
       email,
+      name: event.request.userAttributes.name,
       // Google verifies the address itself; a native user reached this
       // trigger by entering the emailed code. Either way it is verified.
       emailVerified: event.request.userAttributes.email_verified === "true",
@@ -56,9 +56,8 @@ export const postConfirmation = async (event: CognitoTriggerEvent) => {
   } catch (error) {
     // create() is conditional on the row not existing, so a duplicate means
     // the profile is already there — not a reason to fail someone's sign-in.
-    if (!isAwsError(error, "ConditionalCheckFailedException")) {
-      console.error("[postConfirmation] could not write profile", error);
-    }
+    // Never fail a sign-in over the profile: GET /me rebuilds a missing row.
+    console.error("[postConfirmation] could not write profile", error);
   }
 
   return event;

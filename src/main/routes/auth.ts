@@ -2,13 +2,14 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   confirmSignUpSchema,
   forgotPasswordSchema,
-  refreshSchema,
+  refreshTokenSchema,
   resendCodeSchema,
   resetPasswordSchema,
   signInSchema,
   signUpSchema,
 } from "@/applications/schemas/auth";
 import { makeAuthController } from "@/main/factories/makeAuthController";
+import { authenticated, requireUser } from "@/main/plugins/authenticated";
 
 export function authRoutes(app: FastifyInstance) {
   app.post(
@@ -69,7 +70,7 @@ export function authRoutes(app: FastifyInstance) {
   app.post(
     "/auth/refresh",
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const body = refreshSchema.parse(request.body);
+      const body = refreshTokenSchema.parse(request.body);
 
       const response = await makeAuthController().refresh(body);
 
@@ -83,6 +84,32 @@ export function authRoutes(app: FastifyInstance) {
       const body = resendCodeSchema.parse(request.body);
 
       const response = await makeAuthController().resendCode(body);
+
+      reply.status(200).send(response);
+    },
+  );
+
+  app.post(
+    "/auth/signout",
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const body = refreshTokenSchema.parse(request.body);
+
+      await makeAuthController().signOut(body);
+
+      reply.status(204).send();
+    },
+  );
+
+  app.get(
+    "/me",
+    { preHandler: authenticated },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const sub = requireUser(request);
+
+      const response = await makeAuthController().me({
+        sub,
+        email: request.user?.email,
+      });
 
       reply.status(200).send(response);
     },

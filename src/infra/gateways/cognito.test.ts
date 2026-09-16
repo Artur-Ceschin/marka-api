@@ -114,6 +114,39 @@ describe("CognitoGateway.resendConfirmationCode", () => {
   });
 });
 
+describe("CognitoGateway.revokeRefreshToken", () => {
+  it("treats a token Cognito already rejects as signed out", async () => {
+    await gatewayThatThrows(
+      awsError("UnauthorizedException"),
+    ).revokeRefreshToken("already-revoked");
+  });
+
+  it("rejects an access or id token with a 400", async () => {
+    await assert.rejects(
+      () =>
+        gatewayThatThrows(
+          awsError("UnsupportedTokenTypeException"),
+        ).revokeRefreshToken("an-access-token"),
+      (error: unknown) => {
+        assert.ok(error instanceof AppError);
+        assert.equal(error.code, "INVALID_REFRESH_TOKEN");
+        return true;
+      },
+    );
+  });
+
+  it("surfaces revocation being disabled instead of claiming success", async () => {
+    // Swallowing this would tell the user they signed out while their refresh
+    // token kept working for 30 days.
+    const disabled = awsError("UnsupportedOperationException");
+
+    await assert.rejects(
+      () => gatewayThatThrows(disabled).revokeRefreshToken("valid-refresh"),
+      (error: unknown) => error === disabled,
+    );
+  });
+});
+
 describe("CognitoGateway.refresh", () => {
   it("returns new access and id tokens", async () => {
     const tokens = await gatewayThatReturns({

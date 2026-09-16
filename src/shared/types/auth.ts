@@ -23,9 +23,13 @@ export interface AuthTokens {
 export interface UserProfile {
   userId: string;
   email: string;
+  // Only Google supplies a name; email sign-up never asks for one.
+  name?: string | undefined;
   emailVerified: boolean;
   createdAt: string;
 }
+
+export type MeResponse = UserProfile & { success: true };
 
 export interface SignUpResponse {
   success: true;

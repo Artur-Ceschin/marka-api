@@ -33,7 +33,7 @@ const resetPasswordSchema = z.object({
   password: passwordSchema,
 });
 
-const refreshSchema = z.object({
+const refreshTokenSchema = z.object({
   refreshToken: z.string().min(1, "Refresh token is required"),
 });
 
@@ -44,7 +44,7 @@ const resendCodeSchema = z.object({
 export {
   confirmSignUpSchema,
   forgotPasswordSchema,
-  refreshSchema,
+  refreshTokenSchema,
   resendCodeSchema,
   resetPasswordSchema,
   signInSchema,

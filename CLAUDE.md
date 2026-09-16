@@ -476,7 +476,28 @@ POST /auth/forgot-password  -> {email}, Cognito emails a reset code
 POST /auth/reset-password   -> {email, code, password}
 POST /auth/resend-code      -> {email}, a new sign-up confirmation code
 POST /auth/refresh          -> {refreshToken} -> new accessToken + idToken
+POST /auth/signout          -> {refreshToken} -> 204, revoked at Cognito
+GET  /me                    -> the UsersTable profile (JWT authorizer)
 ```
+
+**`/auth/signout` takes no bearer token.** It must work after the id token
+has expired, and holding the refresh token is authority enough to revoke it.
+It calls Cognito `RevokeToken`, which needs no IAM permission and requires
+`EnableTokenRevocation` on the client (set explicitly in `cognito.yml`, even
+though it is the default, because sign-out silently depends on it). It is
+per-device: only that refresh token and the tokens issued from it die.
+An already-revoked token answers 204, so a double sign-out is not an error;
+revocation being disabled is *not* swallowed, since that would report a
+sign-out while the token kept working. **Id tokens already issued stay valid
+at API Gateway until they expire (up to 1 hour)** — the JWT authorizer checks
+signature and expiry, never Cognito, so revocation cannot reach them.
+
+**`/me` repairs a missing profile.** `postConfirmation` never blocks sign-in
+on a failed write, so a signed-in user can have no row. `/me` rebuilds it
+from the edge-verified `sub` and `email` claims with the same conditional put,
+instead of returning a 404 the client cannot act on. It is also the quickest
+check that Google linking worked: signing in both ways must return the same
+`userId`.
 
 **Tokens.** `/identify` sits behind an API Gateway JWT authorizer, which
 validates the `aud` claim — so clients send the **idToken**. Cognito access

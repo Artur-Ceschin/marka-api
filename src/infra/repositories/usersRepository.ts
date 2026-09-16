@@ -1,5 +1,6 @@
-import { PutCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { GetCommand, PutCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { dynamoClient } from "@/infra/clients/dynamo";
+import { isAwsError } from "@/kernel/errors/isAwsError";
 import { requireEnv } from "@/shared/env";
 import type { UserProfile } from "@/shared/types/auth";
 
@@ -14,6 +15,23 @@ export class UsersRepository {
         ConditionExpression: "attribute_not_exists(userId)",
       }),
     );
+  }
+
+  async findById(userId: string): Promise<UserProfile | undefined> {
+    const { Item } = await dynamoClient().send(
+      new GetCommand({ TableName: this.table, Key: { userId } }),
+    );
+
+    return Item as UserProfile | undefined;
+  }
+
+  // Idempotent: an existing row is left exactly as it is, never overwritten.
+  async createIfMissing(profile: UserProfile): Promise<void> {
+    await this.create(profile).catch((error: unknown) => {
+      if (!isAwsError(error, "ConditionalCheckFailedException")) {
+        throw error;
+      }
+    });
   }
 
   async markEmailVerified(userId: string): Promise<void> {

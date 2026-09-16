@@ -6,6 +6,7 @@ import {
   ConfirmSignUpCommand,
   ForgotPasswordCommand,
   ResendConfirmationCodeCommand,
+  RevokeTokenCommand,
   SignUpCommand,
 } from "@aws-sdk/client-cognito-identity-provider";
 import { cognitoClient } from "@/infra/clients/cognito";
@@ -261,6 +262,41 @@ export class CognitoGateway {
           401,
           "SESSION_EXPIRED",
           "Your session has expired. Sign in again",
+        );
+      }
+
+      throw this.toAppError(error);
+    }
+  }
+
+  /**
+   * Revokes the refresh token and the tokens issued from it.
+   *
+   * A token Cognito already rejects counts as signed out, so signing out twice
+   * is not an error. Revocation being disabled on the client IS one: swallowing
+   * it would report a sign-out while the refresh token kept working.
+   */
+  async revokeRefreshToken(refreshToken: string): Promise<void> {
+    try {
+      await this.client.send(
+        new RevokeTokenCommand({
+          ClientId: this.clientId,
+          Token: refreshToken,
+        }),
+      );
+    } catch (error) {
+      if (isAwsError(error, "UnauthorizedException")) {
+        return;
+      }
+
+      if (
+        isAwsError(error, "UnsupportedTokenTypeException") ||
+        isAwsError(error, "InvalidParameterException")
+      ) {
+        throw new AppError(
+          400,
+          "INVALID_REFRESH_TOKEN",
+          "Sign out needs the refresh token, not an access or id token",
         );
       }
 

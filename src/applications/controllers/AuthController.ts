@@ -1,15 +1,18 @@
 import type { ConfirmSignUpUseCase } from "@/applications/useCases/auth/ConfirmSignUpUseCase";
 import type { ForgotPasswordUseCase } from "@/applications/useCases/auth/ForgotPasswordUseCase";
+import type { GetProfileUseCase } from "@/applications/useCases/auth/GetProfileUseCase";
 import type { RefreshTokenUseCase } from "@/applications/useCases/auth/RefreshTokenUseCase";
 import type { ResendCodeUseCase } from "@/applications/useCases/auth/ResendCodeUseCase";
 import type { ResetPasswordUseCase } from "@/applications/useCases/auth/ResetPasswordUseCase";
 import type { SignInUseCase } from "@/applications/useCases/auth/SignInUseCase";
+import type { SignOutUseCase } from "@/applications/useCases/auth/SignOutUseCase";
 import type { SignUpUseCase } from "@/applications/useCases/auth/SignUpUseCase";
 import type {
   ConfirmSignUpRequest,
   ConfirmSignUpResponse,
   ForgotPasswordRequest,
   ForgotPasswordResponse,
+  MeResponse,
   RefreshRequest,
   RefreshResponse,
   ResendCodeRequest,
@@ -31,6 +34,8 @@ export class AuthController {
     private resetPasswordUseCase: ResetPasswordUseCase,
     private refreshTokenUseCase: RefreshTokenUseCase,
     private resendCodeUseCase: ResendCodeUseCase,
+    private getProfileUseCase: GetProfileUseCase,
+    private signOutUseCase: SignOutUseCase,
   ) {}
 
   async signUp(request: SignUpRequest): Promise<SignUpResponse> {
@@ -65,5 +70,16 @@ export class AuthController {
 
   async resendCode(request: ResendCodeRequest): Promise<ResendCodeResponse> {
     return this.resendCodeUseCase.execute(request);
+  }
+
+  async me(user: {
+    sub: string;
+    email?: string | undefined;
+  }): Promise<MeResponse> {
+    return this.getProfileUseCase.execute(user);
+  }
+
+  async signOut(request: { refreshToken: string }): Promise<void> {
+    return this.signOutUseCase.execute(request);
   }
 }

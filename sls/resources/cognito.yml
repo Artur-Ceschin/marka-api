@@ -97,6 +97,9 @@ Resources:
       UserPoolId: !Ref UserPool
 
       GenerateSecret: false
+      # POST /auth/signout depends on this. It defaults to on, but a default is
+      # not a guarantee, so it is stated.
+      EnableTokenRevocation: true
 
       # ALLOW_USER_PASSWORD_AUTH is deliberately absent, so the public client
       # id alone cannot trade a password for tokens.

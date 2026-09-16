@@ -17,3 +17,9 @@ events:
   - httpApi: "POST /auth/reset-password"
   - httpApi: "POST /auth/refresh"
   - httpApi: "POST /auth/resend-code"
+  - httpApi: "POST /auth/signout"
+  - httpApi:
+      path: /me
+      method: GET
+      authorizer:
+        name: cognitoJwt

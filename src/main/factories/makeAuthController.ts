@@ -1,10 +1,12 @@
 import { AuthController } from "@/applications/controllers/AuthController";
 import { ConfirmSignUpUseCase } from "@/applications/useCases/auth/ConfirmSignUpUseCase";
 import { ForgotPasswordUseCase } from "@/applications/useCases/auth/ForgotPasswordUseCase";
+import { GetProfileUseCase } from "@/applications/useCases/auth/GetProfileUseCase";
 import { RefreshTokenUseCase } from "@/applications/useCases/auth/RefreshTokenUseCase";
 import { ResendCodeUseCase } from "@/applications/useCases/auth/ResendCodeUseCase";
 import { ResetPasswordUseCase } from "@/applications/useCases/auth/ResetPasswordUseCase";
 import { SignInUseCase } from "@/applications/useCases/auth/SignInUseCase";
+import { SignOutUseCase } from "@/applications/useCases/auth/SignOutUseCase";
 import { SignUpUseCase } from "@/applications/useCases/auth/SignUpUseCase";
 import { CognitoGateway } from "@/infra/gateways/cognito";
 import { UsersRepository } from "@/infra/repositories/usersRepository";
@@ -24,5 +26,7 @@ export const makeAuthController = lazy(() => {
     new ResetPasswordUseCase(cognito),
     new RefreshTokenUseCase(cognito),
     new ResendCodeUseCase(cognito),
+    new GetProfileUseCase(users),
+    new SignOutUseCase(cognito),
   );
 });
