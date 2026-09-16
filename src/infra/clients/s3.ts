@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   CopyObjectCommand,
+  DeleteObjectCommand,
   GetObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -112,8 +113,7 @@ export class PlantBucket {
     );
   }
 
-  // Copy rather than move: the lifecycle rule already removes the original,
-  // and a delete would need another IAM permission for no benefit.
+  // Copy rather than move: the lifecycle rule already removes the original.
   async persist(uploadKey: string): Promise<string> {
     const key = PlantBucket.durableKeyFor(uploadKey);
 
@@ -127,5 +127,10 @@ export class PlantBucket {
     );
 
     return key;
+  }
+
+  // S3 answers a delete of a missing key with success, so this is idempotent.
+  async deleteObject(key: string): Promise<void> {
+    await s3().send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
   }
 }

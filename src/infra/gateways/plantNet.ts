@@ -1,8 +1,18 @@
 import { AppError } from "@/kernel/errors/AppError";
 import { env } from "@/shared/env";
+import type { Locale } from "@/shared/locale";
 import type { PlantCandidate } from "@/shared/types/plant";
 
 const BASE_URL = "https://my-api.plantnet.org/v2/identify";
+
+// Past the top few, scores are near zero and only clutter the choice. Capping
+// also keeps the identification token, which carries the candidates, small.
+const MAX_RESULTS = 5;
+const MAX_IMAGES_PER_CANDIDATE = 3;
+
+// PlantNet's codes, from its /v2/languages route. It lists pt-br separately
+// from pt, so Brazilian common names are available rather than European ones.
+const PLANTNET_LANG: Record<Locale, string> = { en: "en", "pt-BR": "pt-br" };
 
 // The subset of PlantNet's response we depend on. Declared rather than
 // trusted so a shape change surfaces here instead of downstream.
@@ -15,6 +25,15 @@ interface PlantNetResult {
     family?: { scientificNameWithoutAuthor?: string };
     genus?: { scientificName?: string };
   };
+  // Only with include-related-images=true. Not in PlantNet's published
+  // reference, so every field is optional and read defensively: a shape
+  // change costs the thumbnails, never the identification.
+  images?: {
+    organ?: string;
+    author?: string;
+    license?: string;
+    url?: { o?: string; m?: string; s?: string };
+  }[];
 }
 
 const FIXTURE: PlantCandidate[] = [
@@ -25,6 +44,7 @@ const FIXTURE: PlantCandidate[] = [
     family: "Rosaceae",
     genus: "Rosa",
     confidence: 0.92,
+    images: [],
   },
   {
     species: "Rosa gallica",
@@ -33,6 +53,7 @@ const FIXTURE: PlantCandidate[] = [
     family: "Rosaceae",
     genus: "Rosa",
     confidence: 0.78,
+    images: [],
   },
 ];
 
@@ -45,7 +66,7 @@ export class PlantIdentification {
    * exercisable locally — it logs loudly, because silently serving fake
    * species data is the kind of thing that reaches production.
    */
-  async identify(image: Buffer): Promise<PlantCandidate[]> {
+  async identify(image: Buffer, locale: Locale): Promise<PlantCandidate[]> {
     if (!env.PLANTNET_API_KEY) {
       console.warn("[PlantNet] No API key set — returning fixture data");
       return FIXTURE;
@@ -63,6 +84,10 @@ export class PlantIdentification {
     // instead of "all".
     const url = new URL(`${BASE_URL}/${env.PLANTNET_PROJECT}`);
     url.searchParams.set("api-key", env.PLANTNET_API_KEY);
+    url.searchParams.set("nb-results", String(MAX_RESULTS));
+    url.searchParams.set("include-related-images", "true");
+    // Changes common names only; scientific names are the same in every language.
+    url.searchParams.set("lang", PLANTNET_LANG[locale]);
 
     const response = await fetch(url, { method: "POST", body: form });
 
@@ -79,6 +104,24 @@ export class PlantIdentification {
       family: result.species.family?.scientificNameWithoutAuthor ?? "",
       genus: result.species.genus?.scientificName ?? "",
       confidence: result.score,
+      images: (result.images ?? [])
+        .slice(0, MAX_IMAGES_PER_CANDIDATE)
+        .flatMap((image) => {
+          // Medium size: large enough for a thumbnail on a high-DPI screen
+          // without loading PlantNet's originals.
+          const url = image.url?.m ?? image.url?.s ?? image.url?.o;
+
+          return url
+            ? [
+                {
+                  url,
+                  organ: image.organ,
+                  author: image.author,
+                  license: image.license,
+                },
+              ]
+            : [];
+        }),
     }));
   }
 

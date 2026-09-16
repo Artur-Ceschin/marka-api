@@ -16,6 +16,9 @@ const envSchema = z.object({
   PLANTNET_API_KEY: z.string().optional(),
   PLANTNET_PROJECT: z.string().default("all"),
   OPENAI_API_KEY: z.string().optional(),
+  // Signs identification results. No fixture fallback: a guessable default
+  // would let anyone forge a candidate list if it ever reached production.
+  IDENTIFICATION_TOKEN_SECRET: z.string().optional(),
 });
 
 const _env = envSchema.safeParse(process.env);

@@ -21,12 +21,27 @@ events:
       authorizer:
         name: cognitoJwt
   - httpApi:
-      path: /detections/{detectionId}/confirm
+      path: /detections
       method: POST
       authorizer:
         name: cognitoJwt
   - httpApi:
       path: /identifications
       method: GET
+      authorizer:
+        name: cognitoJwt
+  - httpApi:
+      path: /detections/{detectionId}
+      method: GET
+      authorizer:
+        name: cognitoJwt
+  - httpApi:
+      path: /detections/{detectionId}
+      method: PATCH
+      authorizer:
+        name: cognitoJwt
+  - httpApi:
+      path: /detections/{detectionId}
+      method: DELETE
       authorizer:
         name: cognitoJwt

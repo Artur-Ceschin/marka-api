@@ -1,6 +1,9 @@
+import {
+  IDENTIFICATION_TTL_SECONDS,
+  type IdentificationTokens,
+} from "@/applications/useCases/identify/IdentificationTokens";
 import { PlantBucket } from "@/infra/clients/s3";
 import type { PlantIdentification } from "@/infra/gateways/plantNet";
-import type { DetectionsRepository } from "@/infra/repositories/detectionsRepository";
 import type { UsageRepository } from "@/infra/repositories/usageRepository";
 import type {
   Certainty,
@@ -9,10 +12,10 @@ import type {
   PlantCandidate,
 } from "@/shared/types/plant";
 
-type Bucket = Pick<PlantBucket, "getObject" | "persist">;
+type Bucket = Pick<PlantBucket, "getObject">;
 type Identifier = Pick<PlantIdentification, "identify">;
-type Detections = Pick<DetectionsRepository, "save">;
 type Usage = Pick<UsageRepository, "claimIdentification">;
+type Tokens = Pick<IdentificationTokens, "issue">;
 
 // "high" needs a strong top score AND clear daylight over the runner-up:
 // 0.9 against 0.85 is a coin flip, however strong 0.9 looks on its own.
@@ -37,8 +40,8 @@ export class IdentifyPlantUseCase {
   constructor(
     private plantBucket: Bucket,
     private plantIdentification: Identifier,
-    private detections: Detections,
     private usage: Usage,
+    private tokens: Tokens,
     private newDetectionId: () => string,
   ) {}
 
@@ -54,35 +57,34 @@ export class IdentifyPlantUseCase {
     const image = await this.plantBucket.getObject(request.key);
 
     const quota = await this.usage.claimIdentification(request.userId);
-    const candidates = await this.plantIdentification.identify(image);
-
-    // Copied out of uploads/ only once there is a detection to keep it for, so
-    // a failed identification leaves nothing durable behind.
-    const imageKey = await this.plantBucket.persist(request.key);
-
-    const detectionId = this.newDetectionId();
-    const createdAt = new Date().toISOString();
-    const status = "pending_confirmation";
+    const candidates = await this.plantIdentification.identify(
+      image,
+      request.locale,
+    );
     const certainty = certaintyOf(candidates);
+    const identifiedAt = new Date().toISOString();
 
-    await this.detections.save({
+    // Nothing is written here. A result the user walks away from leaves only
+    // the upload, which the uploads/ lifecycle rule deletes; the detection and
+    // the durable copy of its image are created when a species is picked.
+    const identificationToken = this.tokens.issue({
       userId: request.userId,
-      detectionId,
-      imageKey,
+      detectionId: this.newDetectionId(),
+      key: request.key,
       candidates,
       certainty,
-      status,
       location: request.location,
-      createdAt,
+      observedAt: request.observedAt,
+      identifiedAt,
     });
 
     return {
       success: true,
-      detectionId,
+      identificationToken,
+      expiresIn: IDENTIFICATION_TTL_SECONDS,
       candidates,
       certainty,
-      status,
-      timestamp: createdAt,
+      timestamp: identifiedAt,
       quota,
     };
   }

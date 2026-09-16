@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  DeleteCommand,
   GetCommand,
   PutCommand,
   QueryCommand,
@@ -10,9 +11,22 @@ import { isAwsError } from "@/kernel/errors/isAwsError";
 import { requireEnv } from "@/shared/env";
 import type {
   Detection,
+  DetectionChanges,
   DetectionPage,
-  PlantEnrichment,
 } from "@/shared/types/plant";
+
+// The only attributes an update may touch. The loop walks this list, not the
+// input, so a stray key can never overwrite userId, status or enrichment.
+const EDITABLE_FIELDS = ["notes", "observedAt", "location"] as const;
+
+// A failed condition means "no row matched", which each caller turns into its
+// own answer; anything else is a real failure.
+function unlessConditionFailed(error: unknown): undefined {
+  if (isAwsError(error, "ConditionalCheckFailedException")) {
+    return undefined;
+  }
+  throw error;
+}
 
 export class DetectionsRepository {
   private readonly table = requireEnv("DETECTIONS_TABLE");
@@ -23,10 +37,22 @@ export class DetectionsRepository {
     return `${at.toISOString()}#${randomUUID().slice(0, 8)}`;
   }
 
-  async save(detection: Detection): Promise<void> {
-    await dynamoClient().send(
-      new PutCommand({ TableName: this.table, Item: detection }),
-    );
+  // Conditional on the id being new, so saving the same identification twice
+  // cannot overwrite the first detection. False when it already existed.
+  async create(detection: Detection): Promise<boolean> {
+    try {
+      await dynamoClient().send(
+        new PutCommand({
+          TableName: this.table,
+          Item: detection,
+          ConditionExpression: "attribute_not_exists(detectionId)",
+        }),
+      );
+      return true;
+    } catch (error) {
+      unlessConditionFailed(error);
+      return false;
+    }
   }
 
   // Scoped to one partition key, so this cannot return another user's rows
@@ -74,56 +100,80 @@ export class DetectionsRepository {
     return response.Item as Detection | undefined;
   }
 
-  async confirm({
-    userId,
-    detectionId,
-    species,
-    enrichment,
-  }: {
-    userId: string;
-    detectionId: string;
-    species: string;
-    enrichment: PlantEnrichment;
-  }): Promise<Detection | undefined> {
+  // SET for values, REMOVE for nulls. Storing a DynamoDB NULL instead would
+  // give every reader a third state — present, absent, and present-but-null.
+  static updateExpressionFor(changes: DetectionChanges, now: string) {
+    const names: Record<string, string> = { "#updatedAt": "updatedAt" };
+    const values: Record<string, unknown> = { ":updatedAt": now };
+    const set = ["#updatedAt = :updatedAt"];
+    const remove: string[] = [];
+
+    for (const field of EDITABLE_FIELDS) {
+      const value = changes[field];
+
+      if (value === undefined) {
+        continue;
+      }
+
+      names[`#${field}`] = field;
+
+      if (value === null) {
+        remove.push(`#${field}`);
+      } else {
+        values[`:${field}`] = value;
+        set.push(`#${field} = :${field}`);
+      }
+    }
+
+    const removeClause =
+      remove.length > 0 ? ` REMOVE ${remove.join(", ")}` : "";
+
+    return {
+      UpdateExpression: `SET ${set.join(", ")}${removeClause}`,
+      ExpressionAttributeNames: names,
+      ExpressionAttributeValues: values,
+    };
+  }
+
+  async update(
+    userId: string,
+    detectionId: string,
+    changes: DetectionChanges,
+  ): Promise<Detection | undefined> {
     const response = await dynamoClient()
       .send(
         new UpdateCommand({
           TableName: this.table,
           Key: { userId, detectionId },
-          UpdateExpression:
-            "SET #status = :status, #species = :species, " +
-            "#enrichment = :enrichment, #confirmedAt = :now",
-          // Aliased throughout: `status` is a DynamoDB reserved word, and
-          // aliasing the rest keeps the habit consistent.
-          ExpressionAttributeNames: {
-            "#status": "status",
-            "#species": "confirmedSpecies",
-            "#enrichment": "enrichment",
-            "#confirmedAt": "confirmedAt",
-          },
-          // Never create a row here: an Update on a missing key would otherwise
-          // insert one, inventing a detection that was never identified.
-          ConditionExpression:
-            "attribute_exists(detectionId) AND #status = :pending",
-          ExpressionAttributeValues: {
-            ":status": "confirmed",
-            ":pending": "pending_confirmation",
-            ":species": species,
-            ":enrichment": enrichment,
-            ":now": new Date().toISOString(),
-          },
+          ...DetectionsRepository.updateExpressionFor(
+            changes,
+            new Date().toISOString(),
+          ),
+          // Without it, an update on a missing key inserts a half-built row.
+          ConditionExpression: "attribute_exists(detectionId)",
           ReturnValues: "ALL_NEW",
         }),
       )
-      .catch((error: unknown) => {
-        // No longer pending: another request confirmed it first. Returned as
-        // "nothing confirmed" so the use case decides what that means.
-        if (isAwsError(error, "ConditionalCheckFailedException")) {
-          return undefined;
-        }
-        throw error;
-      });
+      .catch(unlessConditionFailed);
 
     return response?.Attributes as Detection | undefined;
+  }
+
+  // Returns the deleted row, so the caller can remove its image without a
+  // second read. No condition needed: deleting a missing key returns no
+  // attributes, which already says there was nothing to delete.
+  async delete(
+    userId: string,
+    detectionId: string,
+  ): Promise<Detection | undefined> {
+    const response = await dynamoClient().send(
+      new DeleteCommand({
+        TableName: this.table,
+        Key: { userId, detectionId },
+        ReturnValues: "ALL_OLD",
+      }),
+    );
+
+    return response.Attributes as Detection | undefined;
   }
 }

@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { ConfirmDetectionUseCase } from "@/applications/useCases/identify/ConfirmDetectionUseCase";
+import { IdentificationTokens } from "@/applications/useCases/identify/IdentificationTokens";
+import { PlantBucket } from "@/infra/clients/s3";
 import { AppError } from "@/kernel/errors/AppError";
 import type { Detection, PlantEnrichment } from "@/shared/types/plant";
 
 const USER = "b428a418-2001-70dc-2a7c-ab479eb808fc";
 const DETECTION_ID = "2026-09-10T12:00:00.000Z#abcd1234";
+const UPLOAD_KEY = `uploads/${USER}/abc`;
 
 const ENRICHMENT: PlantEnrichment = {
   description: "A rose.",
@@ -14,155 +17,162 @@ const ENRICHMENT: PlantEnrichment = {
   nativeStatus: "Native to the Middle East.",
 };
 
-function detection(overrides: Partial<Detection> = {}): Detection {
-  return {
-    userId: USER,
-    detectionId: DETECTION_ID,
-    imageKey: `detections/${USER}/abc`,
-    candidates: [
-      {
-        species: "Rosa gallica",
-        scientificName: "Rosa gallica L.",
-        commonNames: ["French rose"],
-        family: "Rosaceae",
-        genus: "Rosa",
-        confidence: 0.9,
-      },
-    ],
-    certainty: "high",
-    status: "pending_confirmation",
-    createdAt: "2026-09-10T12:00:00.000Z",
-    ...overrides,
-  };
-}
+const tokens = new IdentificationTokens("test-secret");
 
-function makeDeps(stored: Detection | null = detection()) {
+const TOKEN = tokens.issue({
+  userId: USER,
+  detectionId: DETECTION_ID,
+  key: UPLOAD_KEY,
+  candidates: [
+    {
+      species: "Rosa gallica",
+      scientificName: "Rosa gallica L.",
+      commonNames: ["French rose"],
+      family: "Rosaceae",
+      genus: "Rosa",
+      confidence: 0.9,
+      images: [],
+    },
+  ],
+  certainty: "high",
+  identifiedAt: "2026-09-10T12:00:00.000Z",
+});
+
+function makeDeps({
+  existing = false,
+  createWins = true,
+  enrichError,
+}: {
+  existing?: boolean;
+  createWins?: boolean;
+  enrichError?: Error;
+} = {}) {
   const enrichCalls: string[] = [];
-  const confirmCalls: unknown[] = [];
-  const readKeys: string[] = [];
+  const enrichLocales: string[] = [];
+  const created: Detection[] = [];
+  const persisted: string[] = [];
 
-  return {
-    enrichCalls,
-    confirmCalls,
-    readKeys,
-    detections: {
-      findById: async () => stored ?? undefined,
-      confirm: async (input: { species: string }) => {
-        confirmCalls.push(input);
-        return detection({
-          status: "confirmed",
-          confirmedSpecies: input.species,
-        });
+  const useCase = new ConfirmDetectionUseCase(
+    {
+      findById: async () => (existing ? ({} as Detection) : undefined),
+      create: async (detection: Detection) => {
+        created.push(detection);
+        return createWins;
       },
     },
-    bucket: {
-      getObject: async (key: string) => {
-        readKeys.push(key);
-        return Buffer.from("jpeg");
+    {
+      getObject: async () => Buffer.from("jpeg"),
+      persist: async (key: string) => {
+        persisted.push(key);
+        return PlantBucket.durableKeyFor(key);
       },
+      imageUrl: async (key: string) => `https://signed.test/${key}`,
     },
-    enrichment: {
-      enrich: async ({ species }: { species: string }) => {
+    {
+      enrich: async ({
+        species,
+        locale,
+      }: {
+        species: string;
+        locale: string;
+      }) => {
         enrichCalls.push(species);
+        enrichLocales.push(locale);
+        if (enrichError) throw enrichError;
         return ENRICHMENT;
       },
     },
-  };
+    tokens,
+  );
+
+  return { useCase, enrichCalls, enrichLocales, created, persisted };
 }
 
+const confirm = (deps: ReturnType<typeof makeDeps>, species = "Rosa gallica") =>
+  deps.useCase.execute({
+    userId: USER,
+    identificationToken: TOKEN,
+    species,
+    locale: "en",
+  });
+
 describe("ConfirmDetectionUseCase", () => {
-  it("enriches the confirmed species and stores the result", async () => {
+  it("writes care text in the caller's language and records which", async () => {
     const deps = makeDeps();
 
-    const result = await new ConfirmDetectionUseCase(
-      deps.detections,
-      deps.bucket,
-      deps.enrichment,
-    ).execute({
+    const result = await deps.useCase.execute({
       userId: USER,
-      detectionId: DETECTION_ID,
+      identificationToken: TOKEN,
       species: "Rosa gallica",
+      locale: "pt-BR",
     });
 
-    assert.deepEqual(deps.enrichCalls, ["Rosa gallica"]);
-    assert.deepEqual(deps.readKeys, [`detections/${USER}/abc`]);
-    assert.equal(result.status, "confirmed");
-    assert.deepEqual(result.enrichment, ENRICHMENT);
+    assert.deepEqual(deps.enrichLocales, ["pt-BR"]);
+    // Stored, so a later language switch can tell this text is Portuguese.
+    assert.equal(deps.created[0]?.locale, "pt-BR");
+    assert.equal(result.locale, "pt-BR");
   });
 
-  it("refuses a species PlantNet never proposed", async () => {
+  it("creates the detection, with its image copied out of uploads/", async () => {
+    const deps = makeDeps();
+
+    const result = await confirm(deps);
+
+    assert.equal(result.confirmedSpecies, "Rosa gallica");
+    assert.deepEqual(result.enrichment, ENRICHMENT);
+    assert.equal(result.detectionId, DETECTION_ID);
+    assert.equal(deps.created[0]?.imageKey, `detections/${USER}/abc`);
+    assert.equal(result.imageUrl, `https://signed.test/detections/${USER}/abc`);
+  });
+
+  it("refuses a species PlantNet never proposed, before paying for anything", async () => {
     const deps = makeDeps();
 
     await assert.rejects(
-      () =>
-        new ConfirmDetectionUseCase(
-          deps.detections,
-          deps.bucket,
-          deps.enrichment,
-        ).execute({
-          userId: USER,
-          detectionId: DETECTION_ID,
-          species: "Cannabis sativa",
-        }),
-      (error: unknown) => {
-        assert.ok(error instanceof AppError);
-        assert.equal(error.code, "SPECIES_NOT_A_CANDIDATE");
-        return true;
-      },
+      () => confirm(deps, "Cannabis sativa"),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "SPECIES_NOT_A_CANDIDATE",
     );
-
-    // Without this guard the endpoint is a free "write care instructions for
-    // anything" call, and the stored detection would claim an identification
-    // that never happened.
     assert.deepEqual(deps.enrichCalls, []);
-    assert.deepEqual(deps.confirmCalls, []);
+    assert.deepEqual(deps.created, []);
   });
 
-  it("rejects an already confirmed detection without paying for enrichment", async () => {
-    const deps = makeDeps(detection({ status: "confirmed" }));
+  it("rejects a replayed token without a second LLM call", async () => {
+    const deps = makeDeps({ existing: true });
 
     await assert.rejects(
-      () =>
-        new ConfirmDetectionUseCase(
-          deps.detections,
-          deps.bucket,
-          deps.enrichment,
-        ).execute({
-          userId: USER,
-          detectionId: DETECTION_ID,
-          species: "Rosa gallica",
-        }),
-      (error: unknown) => {
-        assert.ok(error instanceof AppError);
-        assert.equal(error.statusCode, 409);
-        return true;
-      },
+      () => confirm(deps),
+      (error: unknown) => error instanceof AppError && error.statusCode === 409,
     );
-
     assert.deepEqual(deps.enrichCalls, []);
   });
 
-  it("does not enrich a detection belonging to someone else", async () => {
-    const deps = makeDeps(null);
+  it("is a 409 when a concurrent request created the detection first", async () => {
+    const deps = makeDeps({ createWins: false });
 
     await assert.rejects(
-      () =>
-        new ConfirmDetectionUseCase(
-          deps.detections,
-          deps.bucket,
-          deps.enrichment,
-        ).execute({
-          userId: USER,
-          detectionId: DETECTION_ID,
-          species: "Rosa gallica",
-        }),
-      (error: unknown) => {
-        assert.ok(error instanceof AppError);
-        assert.equal(error.statusCode, 404);
-        return true;
-      },
+      () => confirm(deps),
+      (error: unknown) => error instanceof AppError && error.statusCode === 409,
     );
+  });
 
-    assert.deepEqual(deps.enrichCalls, []);
+  it("saves the choice without care text when the model refuses", async () => {
+    const deps = makeDeps({
+      enrichError: new AppError(422, "ENRICHMENT_REFUSED", "Refused"),
+    });
+
+    const result = await confirm(deps);
+
+    assert.equal(result.confirmedSpecies, "Rosa gallica");
+    assert.equal(result.enrichment, undefined);
+    assert.equal(deps.created.length, 1);
+  });
+
+  it("stores and copies nothing when enrichment fails, so the token can retry", async () => {
+    const deps = makeDeps({ enrichError: new Error("OpenAI down") });
+
+    await assert.rejects(() => confirm(deps));
+    assert.deepEqual(deps.created, []);
+    assert.deepEqual(deps.persisted, []);
   });
 });

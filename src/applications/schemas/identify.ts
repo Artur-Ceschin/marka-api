@@ -1,19 +1,51 @@
 import z from "zod";
 import { UPLOAD_CONTENT_TYPES } from "@/infra/clients/s3";
 
+const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000;
+const MAX_NOTES_LENGTH = 2000;
+
 // Both or neither: a latitude without a longitude is not a location.
 const locationSchema = z.object({
   latitude: z.coerce.number().min(-90).max(90),
   longitude: z.coerce.number().min(-180).max(180),
+  accuracy: z.coerce.number().positive().max(100_000).optional(),
 });
+
+const observedAtSchema = z.iso
+  .datetime({ offset: true })
+  .transform((value) => new Date(value).toISOString())
+  .refine(
+    (value) => Date.parse(value) <= Date.now() + MAX_CLOCK_SKEW_MS,
+    "Observed time cannot be in the future",
+  );
 
 const identifyRequestSchema = z.object({
   // Shape only — ownership is proved against the caller in the use case.
   key: z.string().min(1).max(512),
   location: locationSchema.optional(),
+  observedAt: observedAtSchema.optional(),
 });
 
+const updateDetectionSchema = z
+  .object({
+    // A blank note is a removed note, not a stored "".
+    notes: z
+      .string()
+      .trim()
+      .max(MAX_NOTES_LENGTH)
+      .transform((value) => value || null)
+      .nullable()
+      .optional(),
+    observedAt: observedAtSchema.nullable().optional(),
+    location: locationSchema.nullable().optional(),
+  })
+  .refine(
+    (changes) => Object.values(changes).some((value) => value !== undefined),
+    "Send at least one of notes, observedAt or location",
+  );
+
 const confirmDetectionSchema = z.object({
+  identificationToken: z.string().min(1).max(32_000),
   species: z.string().trim().min(1).max(256),
 });
 
@@ -31,4 +63,5 @@ export {
   createUploadSchema,
   identifyRequestSchema,
   listDetectionsSchema,
+  updateDetectionSchema,
 };

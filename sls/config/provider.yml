@@ -16,6 +16,7 @@ environment:
 
   PLANTNET_API_KEY: ${ssm:/marka/${sls:stage}/plantnet-api-key, ''}
   OPENAI_API_KEY: ${ssm:/marka/${sls:stage}/openai-api-key, ''}
+  IDENTIFICATION_TOKEN_SECRET: ${ssm:/marka/${sls:stage}/identification-token-secret}
 
 httpApi:
   # Object form, not `cors: true`: Retry-After must be listed in the exposed
@@ -47,6 +48,7 @@ iam:
         Action:
           - s3:PutObject
           - s3:GetObject
+          - s3:DeleteObject
         Resource:
           Fn::Join: ["", [!GetAtt PlantsBucket.Arn, "/*"]]
       - Effect: Allow
@@ -58,6 +60,8 @@ iam:
           - dynamodb:PutItem
           - dynamodb:GetItem
           - dynamodb:Query
+          - dynamodb:UpdateItem
+          - dynamodb:DeleteItem
         Resource: !GetAtt DetectionsTable.Arn
       - Effect: Allow
         Action:

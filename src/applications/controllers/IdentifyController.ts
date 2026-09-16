@@ -1,10 +1,16 @@
 import type { ConfirmDetectionUseCase } from "@/applications/useCases/identify/ConfirmDetectionUseCase";
 import type { CreateUploadUseCase } from "@/applications/useCases/identify/CreateUploadUseCase";
+import type { DeleteDetectionUseCase } from "@/applications/useCases/identify/DeleteDetectionUseCase";
+import type { GetDetectionUseCase } from "@/applications/useCases/identify/GetDetectionUseCase";
 import type { IdentifyPlantUseCase } from "@/applications/useCases/identify/IdentifyPlantUseCase";
 import type { ListDetectionsUseCase } from "@/applications/useCases/identify/ListDetectionsUseCase";
+import type { UpdateDetectionUseCase } from "@/applications/useCases/identify/UpdateDetectionUseCase";
 import type { PresignedUpload, UploadContentType } from "@/infra/clients/s3";
+import type { Locale } from "@/shared/locale";
 import type {
   ConfirmDetectionResponse,
+  DetectionChanges,
+  DetectionKey,
   DetectionPage,
   DetectionView,
   IdentifyPlantRequest,
@@ -17,6 +23,9 @@ export class IdentifyController {
     private listDetectionsUseCase: ListDetectionsUseCase,
     private createUploadUseCase: CreateUploadUseCase,
     private confirmDetectionUseCase: ConfirmDetectionUseCase,
+    private getDetectionUseCase: GetDetectionUseCase,
+    private updateDetectionUseCase: UpdateDetectionUseCase,
+    private deleteDetectionUseCase: DeleteDetectionUseCase,
   ) {}
 
   async identify(
@@ -43,9 +52,25 @@ export class IdentifyController {
   // argument compile cleanly and fail at runtime.
   async confirm(request: {
     userId: string;
-    detectionId: string;
+    identificationToken: string;
     species: string;
+    locale: Locale;
   }): Promise<ConfirmDetectionResponse> {
     return this.confirmDetectionUseCase.execute(request);
+  }
+
+  async getDetection(key: DetectionKey): Promise<DetectionView> {
+    return this.getDetectionUseCase.execute(key);
+  }
+
+  async updateDetection(
+    key: DetectionKey,
+    changes: DetectionChanges,
+  ): Promise<DetectionView> {
+    return this.updateDetectionUseCase.execute(key, changes);
+  }
+
+  async deleteDetection(key: DetectionKey): Promise<void> {
+    return this.deleteDetectionUseCase.execute(key);
   }
 }

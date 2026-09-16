@@ -2,7 +2,8 @@ import OpenAI from "openai";
 import { AppError } from "@/kernel/errors/AppError";
 import { lazy } from "@/kernel/lazy";
 import { env } from "@/shared/env";
-import type { PlantEnrichment } from "@/shared/types/plant";
+import type { Locale } from "@/shared/locale";
+import type { Location, PlantEnrichment } from "@/shared/types/plant";
 
 const MODEL = "gpt-5-nano";
 
@@ -40,6 +41,14 @@ const SYSTEM_PROMPT =
   "explicit about pets, and never guess: if you are not sure, say the user " +
   "should check with a vet or poison control.";
 
+// Names the language in the request itself, beside the species and location.
+// Only the values change: strict mode keeps the JSON keys exactly as the schema
+// declares them, so the app parses a Portuguese response the same way.
+const LANGUAGE_NAMES: Record<Locale, string> = {
+  en: "English",
+  "pt-BR": "Brazilian Portuguese",
+};
+
 const openai = lazy(() => new OpenAI());
 
 const FIXTURE: PlantEnrichment = {
@@ -54,10 +63,12 @@ export class PlantEnrichmentGateway {
     species,
     image,
     location,
+    locale,
   }: {
     species: string;
     image: Buffer;
-    location?: { latitude: number; longitude: number } | undefined;
+    location?: Location | undefined;
+    locale: Locale;
   }): Promise<PlantEnrichment> {
     if (!env.OPENAI_API_KEY) {
       console.warn("[Enrichment] No API key set — returning fixture data");
@@ -90,7 +101,9 @@ export class PlantEnrichmentGateway {
             content: [
               {
                 type: "input_text",
-                text: `This plant has been identified as ${species}. ${where}`,
+                text:
+                  `This plant has been identified as ${species}. ${where} ` +
+                  `Write every field in ${LANGUAGE_NAMES[locale]}.`,
               },
               {
                 type: "input_image",
