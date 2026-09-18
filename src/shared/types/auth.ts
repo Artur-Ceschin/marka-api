@@ -70,6 +70,12 @@ export interface RefreshRequest {
   refreshToken: string;
 }
 
+export interface GoogleSignInRequest {
+  code: string;
+  codeVerifier: string;
+  redirectUri: string;
+}
+
 export interface ResendCodeRequest {
   email: string;
 }

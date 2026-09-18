@@ -39,32 +39,53 @@ const TOKEN = tokens.issue({
 });
 
 function makeDeps({
-  existing = false,
   createWins = true,
   enrichError,
+  thumbnailFails = false,
 }: {
-  existing?: boolean;
   createWins?: boolean;
   enrichError?: Error;
+  thumbnailFails?: boolean;
 } = {}) {
   const enrichCalls: string[] = [];
   const enrichLocales: string[] = [];
   const created: Detection[] = [];
   const persisted: string[] = [];
+  const objects = new Set([UPLOAD_KEY]);
+  const rows = new Map<string, Detection>();
 
   const useCase = new ConfirmDetectionUseCase(
     {
-      findById: async () => (existing ? ({} as Detection) : undefined),
+      findById: async (_userId: string, detectionId: string) =>
+        rows.get(detectionId),
       create: async (detection: Detection) => {
         created.push(detection);
-        return createWins;
+        if (!createWins) return false;
+        rows.set(detection.detectionId, detection);
+        return true;
       },
     },
     {
-      getObject: async () => Buffer.from("jpeg"),
+      getObject: async (key: string) => {
+        if (!objects.has(key)) {
+          throw new AppError(404, "UPLOAD_NOT_FOUND", "Upload not found");
+        }
+        return Buffer.from("jpeg");
+      },
       persist: async (key: string) => {
         persisted.push(key);
-        return PlantBucket.durableKeyFor(key);
+        const durable = PlantBucket.durableKeyFor(key);
+        objects.add(durable);
+        return durable;
+      },
+      saveThumbnail: async (imageKey: string) => {
+        if (thumbnailFails) throw new Error("Corrupt JPEG");
+        const key = `${imageKey}-thumb`;
+        objects.add(key);
+        return key;
+      },
+      deleteObject: async (key: string) => {
+        objects.delete(key);
       },
       imageUrl: async (key: string) => `https://signed.test/${key}`,
     },
@@ -85,7 +106,15 @@ function makeDeps({
     tokens,
   );
 
-  return { useCase, enrichCalls, enrichLocales, created, persisted };
+  return {
+    useCase,
+    enrichCalls,
+    enrichLocales,
+    created,
+    persisted,
+    objects,
+    rows,
+  };
 }
 
 const confirm = (deps: ReturnType<typeof makeDeps>, species = "Rosa gallica") =>
@@ -97,6 +126,37 @@ const confirm = (deps: ReturnType<typeof makeDeps>, species = "Rosa gallica") =>
   });
 
 describe("ConfirmDetectionUseCase", () => {
+  it("creates the detection, with its image copied out of uploads/", async () => {
+    const deps = makeDeps();
+
+    const result = await confirm(deps);
+
+    assert.equal(result.confirmedSpecies, "Rosa gallica");
+    assert.deepEqual(result.enrichment, ENRICHMENT);
+    assert.equal(result.detectionId, DETECTION_ID);
+    assert.equal(deps.created[0]?.imageKey, `detections/${USER}/abc`);
+    assert.equal(result.imageUrl, `https://signed.test/detections/${USER}/abc`);
+    assert.equal(
+      result.thumbnailUrl,
+      `https://signed.test/detections/${USER}/abc-thumb`,
+    );
+  });
+
+  it("still saves when no thumbnail can be made", async () => {
+    const deps = makeDeps({ thumbnailFails: true });
+    const originalError = console.error;
+    console.error = () => {};
+
+    try {
+      const result = await confirm(deps);
+
+      assert.equal(result.confirmedSpecies, "Rosa gallica");
+      assert.equal(result.thumbnailUrl, undefined);
+    } finally {
+      console.error = originalError;
+    }
+  });
+
   it("writes care text in the caller's language and records which", async () => {
     const deps = makeDeps();
 
@@ -113,18 +173,6 @@ describe("ConfirmDetectionUseCase", () => {
     assert.equal(result.locale, "pt-BR");
   });
 
-  it("creates the detection, with its image copied out of uploads/", async () => {
-    const deps = makeDeps();
-
-    const result = await confirm(deps);
-
-    assert.equal(result.confirmedSpecies, "Rosa gallica");
-    assert.deepEqual(result.enrichment, ENRICHMENT);
-    assert.equal(result.detectionId, DETECTION_ID);
-    assert.equal(deps.created[0]?.imageKey, `detections/${USER}/abc`);
-    assert.equal(result.imageUrl, `https://signed.test/detections/${USER}/abc`);
-  });
-
   it("refuses a species PlantNet never proposed, before paying for anything", async () => {
     const deps = makeDeps();
 
@@ -138,13 +186,29 @@ describe("ConfirmDetectionUseCase", () => {
   });
 
   it("rejects a replayed token without a second LLM call", async () => {
-    const deps = makeDeps({ existing: true });
+    const deps = makeDeps();
+    await confirm(deps);
 
     await assert.rejects(
       () => confirm(deps),
       (error: unknown) => error instanceof AppError && error.statusCode === 409,
     );
-    assert.deepEqual(deps.enrichCalls, []);
+    assert.equal(deps.enrichCalls.length, 1);
+  });
+
+  it("cannot be replayed after the detection is deleted", async () => {
+    // Without deleting the upload, save → delete → save again with the same
+    // token is an unlimited loop of paid enrichment calls.
+    const deps = makeDeps();
+    await confirm(deps);
+    deps.rows.clear();
+
+    await assert.rejects(
+      () => confirm(deps),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "UPLOAD_NOT_FOUND",
+    );
+    assert.equal(deps.enrichCalls.length, 1);
   });
 
   it("is a 409 when a concurrent request created the detection first", async () => {
@@ -154,6 +218,14 @@ describe("ConfirmDetectionUseCase", () => {
       () => confirm(deps),
       (error: unknown) => error instanceof AppError && error.statusCode === 409,
     );
+  });
+
+  it("keeps the upload when the write fails, so the token can retry", async () => {
+    const deps = makeDeps({ createWins: false });
+
+    await assert.rejects(() => confirm(deps));
+
+    assert.ok(deps.objects.has(UPLOAD_KEY));
   });
 
   it("saves the choice without care text when the model refuses", async () => {
@@ -174,5 +246,6 @@ describe("ConfirmDetectionUseCase", () => {
     await assert.rejects(() => confirm(deps));
     assert.deepEqual(deps.created, []);
     assert.deepEqual(deps.persisted, []);
+    assert.ok(deps.objects.has(UPLOAD_KEY));
   });
 });

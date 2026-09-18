@@ -22,9 +22,12 @@ httpApi:
   # Object form, not `cors: true`: Retry-After must be listed in the exposed
   # headers or browsers hide it from fetch() on a cross-origin response.
   cors:
-    allowedOrigins: ["*"]
+    # Named origins, never "*": the refresh token travels as a cookie, and
+    # browsers refuse a credentialed response that allows any origin.
+    allowedOrigins: ${self:custom.webOrigins}
     allowedHeaders: [Content-Type, Authorization, Accept-Language]
     exposedResponseHeaders: [Retry-After]
+    allowCredentials: true
   authorizers:
     cognitoJwt:
       type: jwt

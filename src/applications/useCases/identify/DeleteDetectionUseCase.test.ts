@@ -69,4 +69,21 @@ describe("DeleteDetectionUseCase", () => {
       console.error = originalError;
     }
   });
+
+  it("removes the thumbnail along with the photo", async () => {
+    const deps = makeDeps();
+    deps.detections.delete = async () =>
+      ({
+        ...KEY,
+        imageKey: IMAGE_KEY,
+        thumbnailKey: `${IMAGE_KEY}-thumb`,
+      }) as Detection;
+
+    await new DeleteDetectionUseCase(deps.detections, deps.bucket).execute(KEY);
+
+    assert.deepEqual(deps.deletedImages.sort(), [
+      IMAGE_KEY,
+      `${IMAGE_KEY}-thumb`,
+    ]);
+  });
 });

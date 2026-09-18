@@ -1,6 +1,7 @@
 import {
   AdminLinkProviderForUserCommand,
   ListUsersCommand,
+  type UserType,
 } from "@aws-sdk/client-cognito-identity-provider";
 import { cognitoClient } from "@/infra/clients/cognito";
 import { UsersRepository } from "@/infra/repositories/usersRepository";
@@ -15,20 +16,7 @@ interface CognitoTriggerEvent {
   response: Record<string, unknown>;
 }
 
-/**
- * Creates the DynamoDB profile row after a user is confirmed.
- *
- * This runs for BOTH paths — native sign-up confirmation and a federated
- * user's first Google sign-in both fire PostConfirmation_ConfirmSignUp. That
- * is the whole reason the write lives here rather than in SignUpUseCase:
- * Google users never call /auth/signup, so a profile written there would
- * simply never exist for them.
- *
- * Cognito allows 5 seconds and treats an error as a failed sign-in, so this
- * must stay a single fast write and must not throw for anything recoverable.
- */
 export const postConfirmation = async (event: CognitoTriggerEvent) => {
-  // Fires for password resets too, which must not touch the profile.
   if (event.triggerSource !== "PostConfirmation_ConfirmSignUp") {
     return event;
   }
@@ -48,20 +36,27 @@ export const postConfirmation = async (event: CognitoTriggerEvent) => {
       userId,
       email,
       name: event.request.userAttributes.name,
-      // Google verifies the address itself; a native user reached this
-      // trigger by entering the emailed code. Either way it is verified.
+
       emailVerified: event.request.userAttributes.email_verified === "true",
       createdAt: new Date().toISOString(),
     });
   } catch (error) {
-    // create() is conditional on the row not existing, so a duplicate means
-    // the profile is already there — not a reason to fail someone's sign-in.
-    // Never fail a sign-in over the profile: GET /me rebuilds a missing row.
     console.error("[postConfirmation] could not write profile", error);
   }
 
   return event;
 };
+
+export function findLinkableAccount(users: UserType[]): UserType | undefined {
+  return users.find(
+    (user) =>
+      user.UserStatus === "CONFIRMED" &&
+      user.Attributes?.some(
+        (attribute) =>
+          attribute.Name === "email_verified" && attribute.Value === "true",
+      ),
+  );
+}
 
 /**
  * Links a Google sign-in to an existing native account with the same email.
@@ -105,9 +100,7 @@ export const preSignUp = async (event: CognitoTriggerEvent) => {
       }),
     );
 
-    const native = Users.find(
-      (user) => user.UserStatus !== "EXTERNAL_PROVIDER",
-    );
+    const native = findLinkableAccount(Users);
 
     // No password account with this email: a genuinely new Google user, and
     // Cognito should create them normally.

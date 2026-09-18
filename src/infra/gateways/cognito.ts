@@ -17,6 +17,7 @@ import type {
   AuthTokens,
   ConfirmSignUpRequest,
   ForgotPasswordRequest,
+  GoogleSignInRequest,
   RefreshRequest,
   RefreshResponse,
   ResendCodeRequest,
@@ -302,6 +303,71 @@ export class CognitoGateway {
 
       throw this.toAppError(error);
     }
+  }
+
+  /**
+   * Trades a Google sign-in's authorization code for tokens.
+   *
+   * The browser used to call Cognito's token endpoint itself, which put the
+   * refresh token in JavaScript. Exchanging here is what lets that token go
+   * straight into an httpOnly cookie instead. PKCE still protects the code:
+   * the verifier never left the browser until now, and a code is single-use.
+   *
+   * Read lazily, like the pool ids, so routes that never exchange a code work
+   * without COGNITO_DOMAIN set.
+   */
+  async exchangeAuthorizationCode({
+    code,
+    codeVerifier,
+    redirectUri,
+  }: GoogleSignInRequest): Promise<AuthTokens> {
+    const response = await fetch(
+      `https://${requireEnv("COGNITO_DOMAIN")}/oauth2/token`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "authorization_code",
+          client_id: this.clientId,
+          code,
+          code_verifier: codeVerifier,
+          // Must match the authorize request exactly, or Cognito refuses.
+          redirect_uri: redirectUri,
+        }),
+      },
+    );
+
+    // invalid_grant and friends: a code that expired, was used already, or
+    // does not match its verifier. The user can only start over.
+    if (response.status === 400) {
+      throw new AppError(
+        400,
+        "INVALID_AUTHORIZATION_CODE",
+        "That sign-in has expired. Try signing in with Google again",
+      );
+    }
+
+    if (!response.ok) {
+      throw new Error(`Cognito token endpoint answered ${response.status}`);
+    }
+
+    const tokens = (await response.json()) as {
+      id_token?: string;
+      access_token?: string;
+      refresh_token?: string;
+      expires_in?: number;
+    };
+
+    if (!tokens.id_token || !tokens.access_token || !tokens.refresh_token) {
+      throw new Error("Cognito returned no tokens for the authorization code");
+    }
+
+    return {
+      idToken: tokens.id_token,
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+      expiresIn: tokens.expires_in ?? 3600,
+    };
   }
 
   private async mapErrors<T>(operation: () => Promise<T>): Promise<T> {

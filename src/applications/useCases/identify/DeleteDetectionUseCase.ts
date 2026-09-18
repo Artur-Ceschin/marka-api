@@ -20,14 +20,18 @@ export class DeleteDetectionUseCase {
       throw detectionNotFound();
     }
 
-    // Row first, image second. The reverse order can leave a detection whose
-    // image is gone; this order can only leave an object nothing points at.
     // So a failed image delete is logged rather than returned — the detection
     // the user asked to remove is already gone, and a retry would 404.
-    await this.plantBucket
-      .deleteObject(deleted.imageKey)
-      .catch((error: unknown) => {
-        console.error("[deleteDetection] image left behind", error);
-      });
+    const keys = [deleted.imageKey, deleted.thumbnailKey].filter(
+      (key): key is string => Boolean(key),
+    );
+
+    await Promise.all(
+      keys.map((key) =>
+        this.plantBucket.deleteObject(key).catch((error: unknown) => {
+          console.error("[deleteDetection] image left behind", error);
+        }),
+      ),
+    );
   }
 }

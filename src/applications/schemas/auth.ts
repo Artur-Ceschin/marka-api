@@ -33,8 +33,14 @@ const resetPasswordSchema = z.object({
   password: passwordSchema,
 });
 
-const refreshTokenSchema = z.object({
-  refreshToken: z.string().min(1, "Refresh token is required"),
+// The Google callback's authorization code, sent on for a server-side exchange.
+const googleSignInSchema = z.object({
+  code: z.string().min(1).max(2048),
+  // RFC 7636: 43–128 characters from the URL-unreserved set.
+  codeVerifier: z
+    .string()
+    .regex(/^[A-Za-z0-9\-._~]{43,128}$/, "Invalid code verifier"),
+  redirectUri: z.url(),
 });
 
 const resendCodeSchema = z.object({
@@ -44,7 +50,7 @@ const resendCodeSchema = z.object({
 export {
   confirmSignUpSchema,
   forgotPasswordSchema,
-  refreshTokenSchema,
+  googleSignInSchema,
   resendCodeSchema,
   resetPasswordSchema,
   signInSchema,

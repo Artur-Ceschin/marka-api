@@ -10,6 +10,7 @@ const envSchema = z.object({
   DAILY_IDENTIFY_LIMIT: z.coerce.number().int().min(1).default(5),
   USER_POOL_ID: z.string().optional(),
   USER_POOL_CLIENT_ID: z.string().optional(),
+  COGNITO_DOMAIN: z.string().optional(),
   AWS_REGION: z.string().default("us-east-1"),
   // Optional so the rest of the API boots without them; the gateways fall
   // back to fixtures and say so, rather than failing at import.

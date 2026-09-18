@@ -6,6 +6,7 @@ import { RefreshTokenUseCase } from "@/applications/useCases/auth/RefreshTokenUs
 import { ResendCodeUseCase } from "@/applications/useCases/auth/ResendCodeUseCase";
 import { ResetPasswordUseCase } from "@/applications/useCases/auth/ResetPasswordUseCase";
 import { SignInUseCase } from "@/applications/useCases/auth/SignInUseCase";
+import { SignInWithGoogleUseCase } from "@/applications/useCases/auth/SignInWithGoogleUseCase";
 import { SignOutUseCase } from "@/applications/useCases/auth/SignOutUseCase";
 import { SignUpUseCase } from "@/applications/useCases/auth/SignUpUseCase";
 import { CognitoGateway } from "@/infra/gateways/cognito";
@@ -28,5 +29,6 @@ export const makeAuthController = lazy(() => {
     new ResendCodeUseCase(cognito),
     new GetProfileUseCase(users),
     new SignOutUseCase(cognito),
+    new SignInWithGoogleUseCase(cognito),
   );
 });

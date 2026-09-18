@@ -12,7 +12,10 @@ import type {
   PlantEnrichment,
 } from "@/shared/types/plant";
 
-type Bucket = Pick<PlantBucket, "getObject" | "persist" | "imageUrl">;
+type Bucket = Pick<
+  PlantBucket,
+  "getObject" | "persist" | "saveThumbnail" | "deleteObject" | "imageUrl"
+>;
 type Enricher = Pick<PlantEnrichmentGateway, "enrich">;
 type Detections = Pick<DetectionsRepository, "findById" | "create">;
 type Tokens = Pick<IdentificationTokens, "read">;
@@ -82,10 +85,21 @@ export class ConfirmDetectionUseCase {
     // failed, so there is a detection to keep the image for.
     const imageKey = await this.plantBucket.persist(claims.key);
 
+    // Made here, where the photo is already in memory, so the catalogue grid
+    // loads a few kilobytes per card instead of the full photo. Never fails the
+    // save: without a thumbnail the client falls back to the full image.
+    const thumbnailKey = await this.plantBucket
+      .saveThumbnail(imageKey, image)
+      .catch((error: unknown) => {
+        console.error("[confirmDetection] no thumbnail", error);
+        return undefined;
+      });
+
     const detection: Detection = {
       userId,
       detectionId: claims.detectionId,
       imageKey,
+      thumbnailKey,
       candidates: claims.candidates,
       certainty: claims.certainty,
       status: "confirmed",
@@ -103,6 +117,16 @@ export class ConfirmDetectionUseCase {
     if (!(await this.detections.create(detection))) {
       throw alreadyConfirmed();
     }
+
+    // The upload is what makes the token single-use. The findById check above
+    // stops a replay only while the row exists; after DELETE /detections/{id}
+    // the same token would pass it and pay for enrichment again, in a loop.
+    // With the upload gone, a replay fails at getObject with a 404 first.
+    // Deleted only now, so a failed write above can still retry the token. If
+    // this delete fails the detection is saved regardless, so it is logged.
+    await this.plantBucket.deleteObject(claims.key).catch((error: unknown) => {
+      console.error("[confirmDetection] upload left behind", error);
+    });
 
     return {
       success: true,

@@ -46,6 +46,7 @@ export interface Detection {
   userId: string;
   detectionId: string;
   imageKey: string;
+  thumbnailKey?: string | undefined;
   candidates: PlantCandidate[];
   certainty: Certainty;
   status: DetectionStatus;
@@ -84,7 +85,10 @@ export interface DetectionPage<T = Detection> {
 
 // What the API returns for a stored detection: the private key plus a
 // short-lived URL the client can actually load.
-export type DetectionView = Detection & { imageUrl: string };
+export type DetectionView = Detection & {
+  imageUrl: string;
+  thumbnailUrl?: string | undefined;
+};
 
 export interface IdentifyPlantRequest {
   key: string;

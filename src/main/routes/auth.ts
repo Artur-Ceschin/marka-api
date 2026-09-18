@@ -2,14 +2,28 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   confirmSignUpSchema,
   forgotPasswordSchema,
-  refreshTokenSchema,
+  googleSignInSchema,
   resendCodeSchema,
   resetPasswordSchema,
   signInSchema,
   signUpSchema,
 } from "@/applications/schemas/auth";
+import { AppError } from "@/kernel/errors/AppError";
 import { makeAuthController } from "@/main/factories/makeAuthController";
 import { authenticated, requireUser } from "@/main/plugins/authenticated";
+import {
+  clearRefreshCookie,
+  readRefreshCookie,
+  setRefreshCookie,
+} from "@/main/plugins/refreshCookie";
+import type { SignInResponse } from "@/shared/types/auth";
+
+function startSession(reply: FastifyReply, tokens: SignInResponse): void {
+  const { refreshToken, ...session } = tokens;
+
+  setRefreshCookie(reply, refreshToken);
+  reply.status(200).send(session);
+}
 
 export function authRoutes(app: FastifyInstance) {
   app.post(
@@ -61,18 +75,33 @@ export function authRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const body = signInSchema.parse(request.body);
 
-      const response = await makeAuthController().signIn(body);
+      startSession(reply, await makeAuthController().signIn(body));
+    },
+  );
 
-      reply.status(200).send(response);
+  app.post(
+    "/auth/google",
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const body = googleSignInSchema.parse(request.body);
+
+      startSession(reply, await makeAuthController().signInWithGoogle(body));
     },
   );
 
   app.post(
     "/auth/refresh",
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const body = refreshTokenSchema.parse(request.body);
+      const refreshToken = readRefreshCookie(request);
 
-      const response = await makeAuthController().refresh(body);
+      if (!refreshToken) {
+        throw new AppError(
+          401,
+          "SESSION_EXPIRED",
+          "Your session has expired. Sign in again",
+        );
+      }
+
+      const response = await makeAuthController().refresh({ refreshToken });
 
       reply.status(200).send(response);
     },
@@ -92,10 +121,13 @@ export function authRoutes(app: FastifyInstance) {
   app.post(
     "/auth/signout",
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const body = refreshTokenSchema.parse(request.body);
+      const refreshToken = readRefreshCookie(request);
 
-      await makeAuthController().signOut(body);
+      if (refreshToken) {
+        await makeAuthController().signOut({ refreshToken });
+      }
 
+      clearRefreshCookie(reply);
       reply.status(204).send();
     },
   );

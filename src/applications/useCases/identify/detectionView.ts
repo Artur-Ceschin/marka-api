@@ -8,7 +8,14 @@ export async function toDetectionView(
   detection: Detection,
   bucket: Pick<PlantBucket, "imageUrl">,
 ): Promise<DetectionView> {
-  return { ...detection, imageUrl: await bucket.imageUrl(detection.imageKey) };
+  const [imageUrl, thumbnailUrl] = await Promise.all([
+    bucket.imageUrl(detection.imageKey),
+    detection.thumbnailKey
+      ? bucket.imageUrl(detection.thumbnailKey)
+      : undefined,
+  ]);
+
+  return { ...detection, imageUrl, thumbnailUrl };
 }
 
 // Also the answer for another user's detection: every access is keyed by both

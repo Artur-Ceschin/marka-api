@@ -4,6 +4,8 @@ timeout: 10
 environment:
   USER_POOL_ID: !Ref UserPool
   USER_POOL_CLIENT_ID: !Ref UserPoolClient
+  # The hosted domain's token endpoint, where /auth/google exchanges its code.
+  COGNITO_DOMAIN: ${self:custom.cognitoDomain}.auth.${self:provider.region}.amazoncognito.com
 
 package:
   patterns:
@@ -13,6 +15,7 @@ events:
   - httpApi: "POST /auth/signup"
   - httpApi: "POST /auth/confirm"
   - httpApi: "POST /auth/signin"
+  - httpApi: "POST /auth/google"
   - httpApi: "POST /auth/forgot-password"
   - httpApi: "POST /auth/reset-password"
   - httpApi: "POST /auth/refresh"

@@ -5,6 +5,7 @@ import type { RefreshTokenUseCase } from "@/applications/useCases/auth/RefreshTo
 import type { ResendCodeUseCase } from "@/applications/useCases/auth/ResendCodeUseCase";
 import type { ResetPasswordUseCase } from "@/applications/useCases/auth/ResetPasswordUseCase";
 import type { SignInUseCase } from "@/applications/useCases/auth/SignInUseCase";
+import type { SignInWithGoogleUseCase } from "@/applications/useCases/auth/SignInWithGoogleUseCase";
 import type { SignOutUseCase } from "@/applications/useCases/auth/SignOutUseCase";
 import type { SignUpUseCase } from "@/applications/useCases/auth/SignUpUseCase";
 import type {
@@ -12,6 +13,7 @@ import type {
   ConfirmSignUpResponse,
   ForgotPasswordRequest,
   ForgotPasswordResponse,
+  GoogleSignInRequest,
   MeResponse,
   RefreshRequest,
   RefreshResponse,
@@ -36,6 +38,7 @@ export class AuthController {
     private resendCodeUseCase: ResendCodeUseCase,
     private getProfileUseCase: GetProfileUseCase,
     private signOutUseCase: SignOutUseCase,
+    private signInWithGoogleUseCase: SignInWithGoogleUseCase,
   ) {}
 
   async signUp(request: SignUpRequest): Promise<SignUpResponse> {
@@ -50,6 +53,12 @@ export class AuthController {
 
   async signIn(request: SignInRequest): Promise<SignInResponse> {
     return this.signInUseCase.execute(request);
+  }
+
+  async signInWithGoogle(
+    request: GoogleSignInRequest,
+  ): Promise<SignInResponse> {
+    return this.signInWithGoogleUseCase.execute(request);
   }
 
   async forgotPassword(
