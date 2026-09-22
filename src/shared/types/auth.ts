@@ -1,3 +1,5 @@
+import type { Location } from "@/shared/types/plant";
+
 export interface SignUpRequest {
   email: string;
   password: string;
@@ -23,13 +25,39 @@ export interface AuthTokens {
 export interface UserProfile {
   userId: string;
   email: string;
-  // Only Google supplies a name; email sign-up never asks for one.
   name?: string | undefined;
+  bio?: string | undefined;
+  avatarKey?: string | undefined;
+  // Saved so the identify flow can offer it instead of asking the device
+  // every time. Stored rounded — see homeLocationSchema.
+  homeLocation?: Location | undefined;
+  // Resolved once at save time, not per page view. Absent when the lookup
+  // failed or no home is set — clients fall back to the coordinates.
+  homeLocationName?: string | undefined;
   emailVerified: boolean;
   createdAt: string;
+  updatedAt?: string | undefined;
 }
 
-export type MeResponse = UserProfile & { success: true };
+export type ProfileView = Omit<UserProfile, "avatarKey"> & {
+  avatarUrl?: string | undefined;
+};
+
+export type MeResponse = ProfileView & { success: true };
+
+export interface UpdateProfileRequest {
+  name?: string | null | undefined;
+  bio?: string | null | undefined;
+  avatarKey?: string | null | undefined;
+  homeLocation?: Location | null | undefined;
+}
+
+// What the repository may write: everything a client can send, plus the
+// fields the API derives for itself. Keeping these apart is what stops a
+// client posting its own homeLocationName that contradicts the coordinates.
+export interface ProfileWrite extends UpdateProfileRequest {
+  homeLocationName?: string | null | undefined;
+}
 
 export interface SignUpResponse {
   success: true;

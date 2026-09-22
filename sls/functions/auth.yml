@@ -26,3 +26,18 @@ events:
       method: GET
       authorizer:
         name: cognitoJwt
+  - httpApi:
+      path: /me
+      method: PATCH
+      authorizer:
+        name: cognitoJwt
+  - httpApi:
+      path: /me/avatar-upload
+      method: POST
+      authorizer:
+        name: cognitoJwt
+  - httpApi:
+      path: /me/home-location/preview
+      method: POST
+      authorizer:
+        name: cognitoJwt

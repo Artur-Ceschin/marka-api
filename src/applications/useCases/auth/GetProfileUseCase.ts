@@ -1,11 +1,17 @@
+import { toProfileView } from "@/applications/useCases/auth/profileView";
+import type { PlantBucket } from "@/infra/clients/s3";
 import type { UsersRepository } from "@/infra/repositories/usersRepository";
 import { AppError } from "@/kernel/errors/AppError";
 import type { MeResponse, UserProfile } from "@/shared/types/auth";
 
 type Users = Pick<UsersRepository, "findById" | "createIfMissing">;
+type Bucket = Pick<PlantBucket, "imageUrl">;
 
 export class GetProfileUseCase {
-  constructor(private users: Users) {}
+  constructor(
+    private users: Users,
+    private bucket: Bucket,
+  ) {}
 
   async execute(user: {
     sub: string;
@@ -14,7 +20,7 @@ export class GetProfileUseCase {
     const stored = await this.users.findById(user.sub);
 
     if (stored) {
-      return { success: true, ...stored };
+      return { success: true, ...(await toProfileView(stored, this.bucket)) };
     }
 
     if (!user.email) {

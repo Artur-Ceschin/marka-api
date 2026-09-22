@@ -1,15 +1,9 @@
 import z from "zod";
+import { locationSchema } from "@/applications/schemas/location";
 import { UPLOAD_CONTENT_TYPES } from "@/infra/clients/s3";
 
 const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000;
 const MAX_NOTES_LENGTH = 2000;
-
-// Both or neither: a latitude without a longitude is not a location.
-const locationSchema = z.object({
-  latitude: z.coerce.number().min(-90).max(90),
-  longitude: z.coerce.number().min(-180).max(180),
-  accuracy: z.coerce.number().positive().max(100_000).optional(),
-});
 
 const observedAtSchema = z.iso
   .datetime({ offset: true })

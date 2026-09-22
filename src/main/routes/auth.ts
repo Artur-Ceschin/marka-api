@@ -1,12 +1,15 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
+  avatarUploadSchema,
   confirmSignUpSchema,
   forgotPasswordSchema,
   googleSignInSchema,
+  previewLocationSchema,
   resendCodeSchema,
   resetPasswordSchema,
   signInSchema,
   signUpSchema,
+  updateProfileSchema,
 } from "@/applications/schemas/auth";
 import { AppError } from "@/kernel/errors/AppError";
 import { makeAuthController } from "@/main/factories/makeAuthController";
@@ -16,6 +19,7 @@ import {
   readRefreshCookie,
   setRefreshCookie,
 } from "@/main/plugins/refreshCookie";
+import { localeFrom } from "@/shared/locale";
 import type { SignInResponse } from "@/shared/types/auth";
 
 function startSession(reply: FastifyReply, tokens: SignInResponse): void {
@@ -144,6 +148,61 @@ export function authRoutes(app: FastifyInstance) {
       });
 
       reply.status(200).send(response);
+    },
+  );
+
+  app.patch(
+    "/me",
+    { preHandler: authenticated },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const userId = requireUser(request);
+      const changes = updateProfileSchema.parse(request.body);
+
+      // The place name is resolved in the language the page is showing, the
+      // same header PlantNet and enrichment already read.
+      const locale = localeFrom(request.headers["accept-language"]);
+
+      reply.status(200).send({
+        success: true,
+        ...(await makeAuthController().updateProfile(userId, changes, locale)),
+      });
+    },
+  );
+
+  // Names a coordinate for the UI before anything is saved, so the user sees
+  // "Boa Vista, Roraima, Brazil" the moment they tap "use my location"
+  // instead of a pair of numbers.
+  //
+  // POST rather than GET with query parameters: a GET would put the user's
+  // coordinates into access logs, browser history and any proxy in between,
+  // for a request that is not cacheable anyway.
+  app.post(
+    "/me/home-location/preview",
+    { preHandler: authenticated },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      requireUser(request);
+
+      const location = previewLocationSchema.parse(request.body);
+      const locale = localeFrom(request.headers["accept-language"]);
+
+      reply
+        .status(200)
+        .send(await makeAuthController().previewLocation(location, locale));
+    },
+  );
+
+  app.post(
+    "/me/avatar-upload",
+    { preHandler: authenticated },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const userId = requireUser(request);
+      const { contentType } = avatarUploadSchema.parse(request.body);
+
+      reply
+        .status(201)
+        .send(
+          await makeAuthController().createAvatarUpload(userId, contentType),
+        );
     },
   );
 }

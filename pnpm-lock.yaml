@@ -18,6 +18,9 @@ importers:
       '@aws-sdk/client-dynamodb':
         specifier: ^3.1129.0
         version: 3.1129.0
+      '@aws-sdk/client-geo-places':
+        specifier: ^3.1136.0
+        version: 3.1136.0
       '@aws-sdk/client-s3':
         specifier: ^3.1129.0
         version: 3.1129.0
@@ -89,6 +92,10 @@ packages:
 
   '@aws-sdk/client-dynamodb@3.1129.0':
     resolution: {integrity: sha512-6QDi3K9V3tVvILekQ/AFiihnRMxg2ebWUyaLTABn2CSJeHfUIVTgBLmFXv1b0hgG4QbuaQRkH3uk4d8NpIb0Kg==}
+    engines: {node: '>=20.0.0'}
+
+  '@aws-sdk/client-geo-places@3.1136.0':
+    resolution: {integrity: sha512-uAT9VQAipxRW+WkT4BVCnQvkjF1R8GRfkgCqJfG5bwYXwszXDKPxVkUlLRwl1zVUuEY/UApZ6AHJeKEtl1QW+A==}
     engines: {node: '>=20.0.0'}
 
   '@aws-sdk/client-s3@3.1129.0':
@@ -1023,6 +1030,17 @@ snapshots:
       '@aws-sdk/credential-provider-node': 3.972.83
       '@aws-sdk/dynamodb-codec': 3.973.45
       '@aws-sdk/middleware-endpoint-discovery': 3.972.30
+      '@aws-sdk/types': 3.974.5
+      '@smithy/core': 3.33.3
+      '@smithy/fetch-http-handler': 5.8.0
+      '@smithy/node-http-handler': 4.12.1
+      '@smithy/types': 4.18.0
+      tslib: 2.8.1
+
+  '@aws-sdk/client-geo-places@3.1136.0':
+    dependencies:
+      '@aws-sdk/core': 3.978.0
+      '@aws-sdk/credential-provider-node': 3.972.83
       '@aws-sdk/types': 3.974.5
       '@smithy/core': 3.33.3
       '@smithy/fetch-http-handler': 5.8.0

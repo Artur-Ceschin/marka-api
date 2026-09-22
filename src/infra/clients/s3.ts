@@ -33,9 +33,12 @@ export interface PresignedUpload {
   expiresIn: number;
 }
 
-// uploads/ is expired by a lifecycle rule; detections/ is kept.
+// uploads/ is expired by a lifecycle rule; detections/ and avatars/ are kept.
+// Neither durable prefix may ever sit *under* uploads/, or the rule would
+// quietly delete confirmed images after 7 days.
 const UPLOADS = "uploads/";
 const DETECTIONS = "detections/";
+const AVATARS = "avatars/";
 
 const s3 = lazy(() => new S3Client({ region: env.AWS_REGION }));
 
@@ -56,8 +59,20 @@ export class PlantBucket {
   }
 
   // Same owner and id under a prefix the lifecycle rule does not touch.
-  static durableKeyFor(uploadKey: string): string {
-    return DETECTIONS + uploadKey.slice(UPLOADS.length);
+  static durableKeyFor(uploadKey: string, prefix = DETECTIONS): string {
+    return prefix + uploadKey.slice(UPLOADS.length);
+  }
+
+  static avatarKeyFor(uploadKey: string): string {
+    return PlantBucket.durableKeyFor(uploadKey, AVATARS);
+  }
+
+  // An avatar key reaches PATCH /me from the client, so it is checked the same
+  // way an upload key is: the userId segment must be the caller's own.
+  static assertAvatarOwnedBy(key: string, userId: string): void {
+    if (!key.startsWith(`${AVATARS}${userId}/`)) {
+      throw notFound();
+    }
   }
 
   async createUpload(
@@ -147,9 +162,10 @@ export class PlantBucket {
     return key;
   }
 
-  async persist(uploadKey: string): Promise<string> {
-    const key = PlantBucket.durableKeyFor(uploadKey);
-
+  async persist(
+    uploadKey: string,
+    key = PlantBucket.durableKeyFor(uploadKey),
+  ): Promise<string> {
     await s3().send(
       new CopyObjectCommand({
         Bucket: this.bucket,

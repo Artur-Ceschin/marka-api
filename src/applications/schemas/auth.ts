@@ -1,4 +1,6 @@
 import z from "zod";
+import { homeLocationSchema } from "@/applications/schemas/location";
+import { UPLOAD_CONTENT_TYPES } from "@/infra/clients/s3";
 
 // Mirrors the PasswordPolicy in sls/resources/cognito.yml. Change both.
 const passwordSchema = z
@@ -47,12 +49,53 @@ const resendCodeSchema = z.object({
   email: z.email(),
 });
 
+// A trimmed empty string means "clear it", so it is folded into null here
+// rather than storing "" and making every reader check for both.
+const blankToNull = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .transform((value) => (value.length === 0 ? null : value));
+
+// Each field is optional (absent = leave alone) but nullable (null = remove).
+// Zod's .optional() alone would collapse those into the same thing.
+const updateProfileSchema = z
+  .object({
+    // 80 is generous for a display name and short enough that it cannot be
+    // used to smuggle a paragraph into a field the UI renders on one line.
+    name: blankToNull(80).nullable().optional(),
+    bio: blankToNull(500).nullable().optional(),
+    // The key is checked against the caller's own prefix in the use case;
+    // shape-checking it here only rejects the obviously malformed.
+    avatarKey: z.string().min(1).max(512).nullable().optional(),
+    // The default the identify flow offers as "use my home location".
+    homeLocation: homeLocationSchema.nullable().optional(),
+  })
+  // Rejects `{}`, which would otherwise cost a DynamoDB write to change
+  // nothing but updatedAt.
+  .refine(
+    (body) => Object.values(body).some((value) => value !== undefined),
+    "Provide at least one field to update",
+  );
+
+// The same schema the save path uses, so the previewed point and the stored
+// point are identical — including the rounding.
+const previewLocationSchema = homeLocationSchema;
+
+const avatarUploadSchema = z.object({
+  contentType: z.enum(UPLOAD_CONTENT_TYPES),
+});
+
 export {
+  avatarUploadSchema,
   confirmSignUpSchema,
   forgotPasswordSchema,
   googleSignInSchema,
+  previewLocationSchema,
   resendCodeSchema,
   resetPasswordSchema,
   signInSchema,
   signUpSchema,
+  updateProfileSchema,
 };

@@ -58,6 +58,13 @@ iam:
         Action:
           - s3:ListBucket
         Resource: !GetAtt PlantsBucket.Arn
+      # Reverse geocoding a saved home location into a place name. The v2
+      # Places API is resourceless — there is no PlaceIndex to create or name,
+      # so "*" is the only resource it accepts.
+      - Effect: Allow
+        Action:
+          - geo-places:ReverseGeocode
+        Resource: "*"
       - Effect: Allow
         Action:
           - dynamodb:PutItem

@@ -1,7 +1,9 @@
 import { AuthController } from "@/applications/controllers/AuthController";
 import { ConfirmSignUpUseCase } from "@/applications/useCases/auth/ConfirmSignUpUseCase";
+import { CreateAvatarUploadUseCase } from "@/applications/useCases/auth/CreateAvatarUploadUseCase";
 import { ForgotPasswordUseCase } from "@/applications/useCases/auth/ForgotPasswordUseCase";
 import { GetProfileUseCase } from "@/applications/useCases/auth/GetProfileUseCase";
+import { PreviewLocationUseCase } from "@/applications/useCases/auth/PreviewLocationUseCase";
 import { RefreshTokenUseCase } from "@/applications/useCases/auth/RefreshTokenUseCase";
 import { ResendCodeUseCase } from "@/applications/useCases/auth/ResendCodeUseCase";
 import { ResetPasswordUseCase } from "@/applications/useCases/auth/ResetPasswordUseCase";
@@ -9,7 +11,10 @@ import { SignInUseCase } from "@/applications/useCases/auth/SignInUseCase";
 import { SignInWithGoogleUseCase } from "@/applications/useCases/auth/SignInWithGoogleUseCase";
 import { SignOutUseCase } from "@/applications/useCases/auth/SignOutUseCase";
 import { SignUpUseCase } from "@/applications/useCases/auth/SignUpUseCase";
+import { UpdateProfileUseCase } from "@/applications/useCases/auth/UpdateProfileUseCase";
+import { PlantBucket } from "@/infra/clients/s3";
 import { CognitoGateway } from "@/infra/gateways/cognito";
+import { GeocodingGateway } from "@/infra/gateways/geocoding";
 import { UsersRepository } from "@/infra/repositories/usersRepository";
 import { lazy } from "@/kernel/lazy";
 
@@ -18,6 +23,10 @@ import { lazy } from "@/kernel/lazy";
 export const makeAuthController = lazy(() => {
   const cognito = new CognitoGateway();
   const users = new UsersRepository();
+  // Same bucket as plant photos, under its own avatars/ prefix. The auth
+  // function therefore needs PLANTS_BUCKET set — see sls/functions/auth.yml.
+  const bucket = new PlantBucket();
+  const geocoder = new GeocodingGateway();
 
   return new AuthController(
     new SignUpUseCase(cognito, users),
@@ -27,8 +36,11 @@ export const makeAuthController = lazy(() => {
     new ResetPasswordUseCase(cognito),
     new RefreshTokenUseCase(cognito),
     new ResendCodeUseCase(cognito),
-    new GetProfileUseCase(users),
+    new GetProfileUseCase(users, bucket),
     new SignOutUseCase(cognito),
     new SignInWithGoogleUseCase(cognito),
+    new UpdateProfileUseCase(users, bucket, geocoder),
+    new CreateAvatarUploadUseCase(bucket),
+    new PreviewLocationUseCase(geocoder),
   );
 });

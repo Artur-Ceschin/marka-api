@@ -1,6 +1,8 @@
 import type { ConfirmSignUpUseCase } from "@/applications/useCases/auth/ConfirmSignUpUseCase";
+import type { CreateAvatarUploadUseCase } from "@/applications/useCases/auth/CreateAvatarUploadUseCase";
 import type { ForgotPasswordUseCase } from "@/applications/useCases/auth/ForgotPasswordUseCase";
 import type { GetProfileUseCase } from "@/applications/useCases/auth/GetProfileUseCase";
+import type { PreviewLocationUseCase } from "@/applications/useCases/auth/PreviewLocationUseCase";
 import type { RefreshTokenUseCase } from "@/applications/useCases/auth/RefreshTokenUseCase";
 import type { ResendCodeUseCase } from "@/applications/useCases/auth/ResendCodeUseCase";
 import type { ResetPasswordUseCase } from "@/applications/useCases/auth/ResetPasswordUseCase";
@@ -8,6 +10,9 @@ import type { SignInUseCase } from "@/applications/useCases/auth/SignInUseCase";
 import type { SignInWithGoogleUseCase } from "@/applications/useCases/auth/SignInWithGoogleUseCase";
 import type { SignOutUseCase } from "@/applications/useCases/auth/SignOutUseCase";
 import type { SignUpUseCase } from "@/applications/useCases/auth/SignUpUseCase";
+import type { UpdateProfileUseCase } from "@/applications/useCases/auth/UpdateProfileUseCase";
+import type { PresignedUpload, UploadContentType } from "@/infra/clients/s3";
+import type { Locale } from "@/shared/locale";
 import type {
   ConfirmSignUpRequest,
   ConfirmSignUpResponse,
@@ -15,6 +20,7 @@ import type {
   ForgotPasswordResponse,
   GoogleSignInRequest,
   MeResponse,
+  ProfileView,
   RefreshRequest,
   RefreshResponse,
   ResendCodeRequest,
@@ -25,7 +31,9 @@ import type {
   SignInResponse,
   SignUpRequest,
   SignUpResponse,
+  UpdateProfileRequest,
 } from "@/shared/types/auth";
+import type { Location } from "@/shared/types/plant";
 
 export class AuthController {
   constructor(
@@ -39,7 +47,32 @@ export class AuthController {
     private getProfileUseCase: GetProfileUseCase,
     private signOutUseCase: SignOutUseCase,
     private signInWithGoogleUseCase: SignInWithGoogleUseCase,
+    private updateProfileUseCase: UpdateProfileUseCase,
+    private createAvatarUploadUseCase: CreateAvatarUploadUseCase,
+    private previewLocationUseCase: PreviewLocationUseCase,
   ) {}
+
+  async previewLocation(
+    location: Location,
+    locale: Locale,
+  ): Promise<{ name: string | null }> {
+    return this.previewLocationUseCase.execute(location, locale);
+  }
+
+  async updateProfile(
+    userId: string,
+    changes: UpdateProfileRequest,
+    locale: Locale,
+  ): Promise<ProfileView> {
+    return this.updateProfileUseCase.execute(userId, changes, locale);
+  }
+
+  async createAvatarUpload(
+    userId: string,
+    contentType: UploadContentType,
+  ): Promise<PresignedUpload> {
+    return this.createAvatarUploadUseCase.execute(userId, contentType);
+  }
 
   async signUp(request: SignUpRequest): Promise<SignUpResponse> {
     return this.signUpUseCase.execute(request);
